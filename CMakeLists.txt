@@ -11,6 +11,7 @@ set(SRC
 )
 
 set(HEADERS
+        private_include/DebugBreak.h
 )
 
 # External libs
@@ -19,7 +20,8 @@ include(FetchDependencies.cmake)
 add_executable(${EXE_NAME}_exec ${SRC} ${HEADERS})
 add_library(${EXE_NAME} ${SRC} ${HEADERS})
 
-target_include_directories(${EXE_NAME} PUBLIC api PRIVATE_HEADER private_include)
+target_include_directories(${EXE_NAME}_exec PUBLIC api PRIVATE private_include)
+target_include_directories(${EXE_NAME} PUBLIC api PRIVATE private_include)
 # target_link_libraries(${EXE_NAME}
 # )
 
