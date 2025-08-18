@@ -1,0 +1,31 @@
+{
+	"settings": {
+		"cmake": {
+			"build_folder": "$folder/build",
+			"generator": "Ninja",
+			"env": {
+				"CC": "clang",
+				"CXX": "clang++",				
+			},
+		},
+		"clangd": {
+			"enabled": true,
+		},
+	},
+	"folders":
+	[
+		{
+			"path": ".",
+			"folder_exclude_patterns": [
+				".cache",
+				".vscode",
+				"lib",
+			],
+			"file_exclude_patterns": [
+				".clang-format",
+				"*.sublime-workspace",
+				"*.sublime-project"
+			],
+		}
+	],
+}
