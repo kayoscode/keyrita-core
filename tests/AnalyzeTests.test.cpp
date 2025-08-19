@@ -2,7 +2,6 @@
 
 TEST(AutoPass, AnalyzeTests)
 {
-
 }
 
 int main(int argc, char** argv)
