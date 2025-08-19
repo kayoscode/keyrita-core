@@ -20,11 +20,13 @@
 				".cache",
 				".vscode",
 				"lib",
+				"build"
 			],
 			"file_exclude_patterns": [
 				".clang-format",
 				"*.sublime-workspace",
-				"*.sublime-project"
+				"*.sublime-project",
+				"keyrita-core-proj-stub"
 			],
 		}
 	],

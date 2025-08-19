@@ -19,4 +19,4 @@ cmake-build-debug-gcc
 cmake-build-release-gcc
 default.profraw
 *.sublime-workspace
-*.sublime-proj
+*.sublime-project
