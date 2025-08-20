@@ -120,6 +120,20 @@ protected:
    }
 
    /**
+    * @brief      Called after the state value changes.
+    */
+   virtual void OnChangeAction() override
+   {
+      tStateChangedEventData stateChangedEventData;
+
+      // Push events to listeners.
+      this->mOnChanged.Dispatch(stateChangedEventData);
+
+      // Now call our generic child action.
+      Action(stateChangedEventData);
+   }
+
+   /**
     * @brief      Override logic to copy the desired value into the current value.
     */
    virtual void ApplyDesiredValue() = 0;
@@ -197,20 +211,6 @@ public:
    }
 
 protected:
-   /**
-    * @brief      Called after the state value changes.
-    */
-   virtual void OnChangeAction() override
-   {
-      tStateChangedEventData stateChangedEventData;
-
-      // Push events to listeners.
-      this->mOnChanged.Dispatch(stateChangedEventData);
-
-      // Now call our generic child action.
-      Action(stateChangedEventData);
-   }
-
    /**
     * @brief      Simply set the value to the current desired value.
     */
