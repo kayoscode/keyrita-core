@@ -13,8 +13,9 @@ TODO: mirror sublime extensions file.
 
 Ensure the following are in your system path
 Windows:
-C:\Program Files\Git\usr\bin
-C:\Program Files\Git\mingw64\libexec\git-core
+
+1. C:\Program Files\Git\usr\bin
+2. C:\Program Files\Git\mingw64\libexec\git-core
 
 All:
-CMake binary
+1. CMake binary
