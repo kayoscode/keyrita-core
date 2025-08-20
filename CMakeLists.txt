@@ -6,12 +6,18 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(EXE_NAME keyrita-core)
 project(${EXE_NAME} LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(SRC
         src/main.cpp
+        src/State.cpp
 )
 
 set(HEADERS
         private_include/DebugBreak.h
+        api/keyrita_core/State.h
 )
 
 # External libs
@@ -22,8 +28,9 @@ add_library(${EXE_NAME} ${SRC} ${HEADERS})
 
 target_include_directories(${EXE_NAME}_exec PUBLIC api PRIVATE private_include)
 target_include_directories(${EXE_NAME} PUBLIC api PRIVATE private_include)
-# target_link_libraries(${EXE_NAME}
-# )
+
+target_link_libraries(${EXE_NAME}_exec cpp-events)
+target_link_libraries(${EXE_NAME} cpp-events)
 
 # Add tests
 add_subdirectory(tests)
