@@ -2,6 +2,8 @@
 
 #include <concepts>
 #include <cpp_events/Event.h>
+#include <functional>
+#include <span>
 
 namespace kc
 {
@@ -165,10 +167,10 @@ protected:
    }
 };
 
-#pragma region Scalar state
-
 template <typename T>
 concept ScalarStateValue = std::copyable<T> && std::equality_comparable<T>;
+
+#pragma region Scalar state
 
 template <ScalarStateValue T> class IScalarState : public virtual ReadState
 {
@@ -176,19 +178,19 @@ public:
    /**
     * @return     The queried scalar value.
     */
-   virtual T GetValue() = 0;
+   virtual const T& GetValue() = 0;
 };
 
 /**
  * @brief       Stores and handles scalar state.
- * When it comes to floating point, it's important to remember that normal floating point comparisons
- * apply. NAN equal to anything is false (even itself). If you set it to NaN, 
- * Even setting it back to nan will trigger a state change notification. Ideally, you wouldn't allow 
- * Nan to be a valid value for this kind of state. If you'd like extra logic to correct for this,
- * make a derivation on top of this class and implement the logic in the equality comparisons.
+ * When it comes to floating point, it's important to remember that normal floating point
+ * comparisons apply. NAN equal to anything is false (even itself). If you set it to NaN, Even
+ * setting it back to nan will trigger a state change notification. Ideally, you wouldn't allow Nan
+ * to be a valid value for this kind of state. If you'd like extra logic to correct for this, make a
+ * derivation on top of this class and implement the logic in the equality comparisons.
  */
 template <ScalarStateValue T>
-class ScalarState : public virtual IScalarState<T>, public virtual ReadWriteState
+class ScalarState : public virtual ReadWriteState, public virtual IScalarState<T>
 {
 public:
    /**
@@ -196,12 +198,12 @@ public:
     *
     * @param[in]  defaultValue  Specify the default value.
     */
-   ScalarState(T defaultValue) : mDefaultValue(defaultValue)
+   ScalarState(const T& defaultValue) : mDefaultValue(defaultValue)
    {
       SetToDefault();
    }
 
-   T GetValue() override
+   const T& GetValue() override
    {
       return mValue;
    }
@@ -211,7 +213,7 @@ public:
     *
     * @param[in]  newValue  The new value to set to.
     */
-   void Set(T newValue)
+   void Set(const T& newValue)
    {
       mDesiredValue = newValue;
       SetToDesiredValue();
@@ -257,6 +259,141 @@ private:
    T mDesiredValue;
    T mDefaultValue;
    T mValue;
+};
+
+#pragma endregion
+
+#pragma region Vector state
+
+template <ScalarStateValue T, size_t TSize> class IVectorState : public virtual ReadState
+{
+public:
+   /**
+    * @brief      Returns the value at a given index.
+    *
+    * @param[in]  index  The index
+    *
+    * @return     The value.
+    */
+   virtual T GetValue(size_t index) = 0;
+
+   /**
+    * @brief      Returns a readonly view of the data.
+    *
+    * @return     The readonly data view as a span.
+    */
+   virtual const std::span<const T> GetValue() = 0;
+
+   /**
+    * @brief      Returns the number of elements in this vector state.
+    * This cannot be modified at runtime.
+    *
+    * @return     The size.
+    */
+   size_t GetSize() const
+   {
+      return TSize;
+   }
+};
+
+template <ScalarStateValue T, size_t TSize>
+class VectorState : public virtual ReadWriteState, public virtual IVectorState<T, TSize>
+{
+public:
+   /**
+    * @brief      Standard constructor
+    *
+    * @param[in]  defaultScalar  The default value for every element in the vector state.
+    */
+   VectorState(const T& defaultScalar)
+      : mDefaultScalar(defaultScalar)
+   {
+      // Set to default is still abstract at this level, someone has to override it to set the
+      // initial value.
+      SetToDefault();
+   }
+
+   virtual T GetValue(size_t index) override 
+   {
+      return this->mValue[index];
+   }
+
+   virtual const std::span<const T> GetValue() override
+   {
+      return this->mValue;
+   }
+
+   /**
+    * @brief      Sets a single value and updates the state.
+    *
+    * @param[in]  value  The value
+    * @param[in]  index  The index
+    */
+   virtual void SetValue(const T& value, size_t index)
+   {
+      mDesiredValue[index] = value;
+      SetToDesiredValue();
+   }
+
+   /**
+    * @brief      Sets many values and only updates the state and calls the changed callback once.
+    *
+    * @param[in]  setCallback  The set callback
+    */
+   virtual void SetValues(std::function<void(std::span<T> data, size_t count)> setCallback)
+   {
+      setCallback(mDesiredValue, TSize);
+      SetToDesiredValue();
+   }
+
+   /**
+    * @return     Compares if the current value is equal to default.
+    */
+   virtual bool IsAtDefault() override
+   {
+      for (size_t i = 0; i < TSize; i++)
+      {
+         if (mValue[i] != mDefaultScalar)
+         {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+protected:
+   /**
+    * @brief      Simply set the value to the current desired value.
+    */
+   virtual void ApplyDesiredValue() override
+   {
+      for (size_t i = 0; i < TSize; i++)
+      {
+         mValue[i] = mDesiredValue[i];
+      }
+   }
+
+   /**
+    * @return     True if desired value different, False otherwise.
+    */
+   virtual bool IsDesiredValueDifferent() override
+   {
+      for (size_t i = 0; i < TSize; i++)
+      {
+         if (mValue[i] != mDesiredValue[i])
+         {
+            return true;
+         }
+      }
+
+      return false;
+   }
+
+private:
+   T mValue[TSize];
+   T mDesiredValue[TSize];
+   T mDefaultScalar;
 };
 
 #pragma endregion
