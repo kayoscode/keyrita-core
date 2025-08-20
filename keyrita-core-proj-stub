@@ -2,6 +2,11 @@
 	"settings": {
 		"cmake": {
 			"build_folder": "$folder/build",
+			"command_line_overrides":
+            {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+            },
 			"generator": "Ninja",
 			"env": {
 				"CC": "clang",

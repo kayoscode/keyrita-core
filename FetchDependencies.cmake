@@ -11,3 +11,13 @@ if (NOT TARGET googletest)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 endif ()
+
+# Event management. Useful for state update notifications
+if (NOT TARGET cpp-events)
+    FetchContent_Declare(
+            cpp-event
+            GIT_REPOSITORY https://github.com/kayoscode/cpp-event.git
+    )
+
+    FetchContent_MakeAvailable(cpp-event)
+endif ()
