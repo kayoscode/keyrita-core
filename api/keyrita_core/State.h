@@ -5,15 +5,30 @@
 
 namespace kc
 {
+class IReadState;
+
 /**
  * @brief      Defines the data packaged with a change of state.
  */
 struct tStateChangedEventData : public tEventData
 {
 public:
-   tStateChangedEventData() : tEventData()
+   /**
+    * Default constructor.
+    */
+   tStateChangedEventData() : tEventData(), SourceState(nullptr)
    {
    }
+
+   /**
+    * Standard constructor.
+    */
+   tStateChangedEventData(IReadState* sourceState) : tEventData(), SourceState(sourceState)
+   {
+   }
+
+   // The state value from which this event originated.
+   IReadState* SourceState;
 };
 
 /**
@@ -93,7 +108,9 @@ public:
    /**
     * @brief      Standard constructor, initializes to a default.
     */
-   ReadWriteState(){}
+   ReadWriteState()
+   {
+   }
 
 protected:
    /**
@@ -124,7 +141,7 @@ protected:
     */
    virtual void OnChangeAction() override
    {
-      tStateChangedEventData stateChangedEventData;
+      tStateChangedEventData stateChangedEventData(this);
 
       // Push events to listeners.
       this->mOnChanged.Dispatch(stateChangedEventData);
@@ -150,11 +167,10 @@ protected:
 
 #pragma region Scalar state
 
-template<typename T>
+template <typename T>
 concept ScalarStateValue = std::copyable<T> && std::equality_comparable<T>;
 
-template <ScalarStateValue T>
-class IScalarState : public virtual ReadState
+template <ScalarStateValue T> class IScalarState : public virtual ReadState
 {
 public:
    /**
@@ -163,6 +179,14 @@ public:
    virtual T GetValue() = 0;
 };
 
+/**
+ * @brief       Stores and handles scalar state.
+ * When it comes to floating point, it's important to remember that normal floating point comparisons
+ * apply. NAN equal to anything is false (even itself). If you set it to NaN, 
+ * Even setting it back to nan will trigger a state change notification. Ideally, you wouldn't allow 
+ * Nan to be a valid value for this kind of state. If you'd like extra logic to correct for this,
+ * make a derivation on top of this class and implement the logic in the equality comparisons.
+ */
 template <ScalarStateValue T>
 class ScalarState : public virtual IScalarState<T>, public virtual ReadWriteState
 {
@@ -172,13 +196,12 @@ public:
     *
     * @param[in]  defaultValue  Specify the default value.
     */
-   ScalarState(T defaultValue)
-      : mDefaultValue(defaultValue)
+   ScalarState(T defaultValue) : mDefaultValue(defaultValue)
    {
       SetToDefault();
    }
 
-   T GetValue() override 
+   T GetValue() override
    {
       return mValue;
    }
@@ -197,7 +220,7 @@ public:
    /**
     * @brief      Sets the desired value to default, then attempts to change the state value.
     */
-   void SetToDefault() override
+   virtual void SetToDefault() override
    {
       Set(mDefaultValue);
    }
@@ -205,16 +228,16 @@ public:
    /**
     * @return     Compares if the current value is equal to default.
     */
-   bool IsAtDefault() override 
+   virtual bool IsAtDefault() override
    {
-      return this->mValue != mDefaultValue;
+      return this->mValue == mDefaultValue;
    }
 
 protected:
    /**
     * @brief      Simply set the value to the current desired value.
     */
-   void ApplyDesiredValue() override
+   virtual void ApplyDesiredValue() override
    {
       this->mValue = mDesiredValue;
    }
@@ -222,7 +245,7 @@ protected:
    /**
     * @return     True if desired value different, False otherwise.
     */
-   bool IsDesiredValueDifferent() override
+   virtual bool IsDesiredValueDifferent() override
    {
       return this->mValue != mDesiredValue;
    }
