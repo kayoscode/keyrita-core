@@ -333,7 +333,7 @@ public:
       : mDefaultScalar(defaultScalar)
    {
       // Need to have at least one element.
-      static_assert(TSize > 0);
+      static_assert(TSize > 0, "Invalid vector size");
 
       SetToDefault();
    }
