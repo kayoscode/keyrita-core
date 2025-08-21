@@ -44,6 +44,17 @@ public:
     * @return     A reference to the state changed event listener.
     */
    virtual EventListener<tStateChangedEventData>& OnChanged() = 0;
+
+   /**
+    * @return     Compares if the current value is equal to default.
+    */
+   virtual bool IsAtDefault() const = 0;
+
+protected:
+   /**
+    * @return     True if desired value different, False otherwise.
+    */
+   virtual bool IsDesiredValueDifferent() const = 0;
 };
 
 /**
@@ -57,11 +68,6 @@ public:
     */
    virtual void SetToDefault() = 0;
 
-   /**
-    * @return     Compares if the current value is equal to default.
-    */
-   virtual bool IsAtDefault() = 0;
-
 protected:
    /**
     * @brief      Initializes the value in the setting. Usually to some default.
@@ -72,11 +78,6 @@ protected:
     * @brief      Called after the state value changes.
     */
    virtual void OnChangeAction() = 0;
-
-   /**
-    * @return     True if desired value different, False otherwise.
-    */
-   virtual bool IsDesiredValueDifferent() = 0;
 
    /**
     * @brief      The state override determines what the desired value is. This method is called to
@@ -230,7 +231,7 @@ public:
    /**
     * @return     Compares if the current value is equal to default.
     */
-   virtual bool IsAtDefault() override
+   virtual bool IsAtDefault() const override
    {
       return this->mValue == mDefaultValue;
    }
@@ -247,7 +248,7 @@ protected:
    /**
     * @return     True if desired value different, False otherwise.
     */
-   virtual bool IsDesiredValueDifferent() override
+   virtual bool IsDesiredValueDifferent() const override
    {
       return this->mValue != mDesiredValue;
    }
@@ -275,20 +276,37 @@ public:
     *
     * @return     The value.
     */
-   virtual T GetValue(size_t index) = 0;
+   virtual T GetValue(size_t index) const = 0;
+
+   /**
+    * @brief       Returns the value at a given index.
+    * @param       index
+    * @return      the value at the given index
+    */
+   virtual T operator[](size_t index) const = 0;
 
    /**
     * @brief      Returns a readonly view of the data.
     *
     * @return     The readonly data view as a span.
     */
-   virtual const std::span<const T> GetValue() = 0;
+   virtual const std::span<const T> GetValue() const = 0;
 
    /**
     * @brief       Performs an action per element readonly
     * @param       func  
     */
-   virtual void ForEach(std::function<void(const T& value)> func) = 0;
+   virtual void ForEach(std::function<void(const T& value, size_t index)> func) const = 0;
+
+   /**
+    * @return      true if all values match the predicate
+    */
+   virtual bool All(std::function<bool(const T& value)> predicate) const = 0;
+
+   /**
+    * @return      true if any of the values in the set match the predicate
+    */
+   virtual bool Any(std::function<bool(const T& value)> predicate) const = 0;
 
    /**
     * @brief      Returns the number of elements in this vector state.
@@ -314,17 +332,29 @@ public:
    VectorState(const T& defaultScalar)
       : mDefaultScalar(defaultScalar)
    {
-      // Ensure positive sizes.
-      static_assert(TSize >= 0);
+      // Need to have at least one element.
+      static_assert(TSize > 0);
+
       SetToDefault();
    }
 
-   virtual T GetValue(size_t index) override 
+   virtual T GetValue(size_t index) const override 
    {
+      assert(index < TSize);
       return this->mValue[index];
    }
 
-   virtual const std::span<const T> GetValue() override
+   /**
+    * @brief       Returns the value at the given index, no bounds checking.
+    * @param       index  
+    * @return      
+    */
+   virtual T operator[](size_t index) const override
+   {
+      return mValue[index];
+   }
+
+   virtual const std::span<const T> GetValue() const override
    {
       return this->mValue;
    }
@@ -337,6 +367,8 @@ public:
     */
    virtual void SetValue(const T& value, size_t index)
    {
+      assert(index < TSize);
+
       mDesiredValue[index] = value;
       SetToDesiredValue();
    }
@@ -345,7 +377,7 @@ public:
     * @brief       Sets all the values in the vector to the given value.
     * @param       value  
     */
-   virtual void SetAll(const T& value)
+   virtual VectorState& SetAll(const T& value)
    {
       SetValues([value](std::span<T> data, size_t count) 
       {
@@ -354,6 +386,8 @@ public:
             data[i] = value;
          }
       });
+
+      return *this;
    }
 
    /**
@@ -361,16 +395,17 @@ public:
     *
     * @param[in]  setCallback  The set callback
     */
-   virtual void SetValues(std::function<void(std::span<T> data, size_t count)> setCallback)
+   virtual VectorState& SetValues(std::function<void(std::span<T> data, size_t count)> setCallback)
    {
       setCallback(mDesiredValue, TSize);
       SetToDesiredValue();
+      return *this;
    }
 
    /**
     * @return     Compares if the current value is equal to default.
     */
-   virtual bool IsAtDefault() override
+   virtual bool IsAtDefault() const override
    {
       for (size_t i = 0; i < TSize; i++)
       {
@@ -391,11 +426,38 @@ public:
       SetAll(mDefaultScalar);
    }
 
+   virtual bool All(std::function<bool(const T& value)> predicate) const override
+   {
+      for (int i = 0; i < TSize; i++)
+      {
+         if (!predicate(mValue[i]))
+         {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+
+   virtual bool Any(std::function<bool(const T& value)> predicate) const override
+   {
+      for (int i = 0; i < TSize; i++)
+      {
+         if (predicate(mValue[i]))
+         {
+            return true;
+         }
+      }
+
+      return false;
+   }
+
    /**
     * @brief       Transforms each value to a new value from the mapper func
     * @param       mapper  
     */
-   virtual void Map(std::function<T (const T& value)> mapper)
+   virtual VectorState& Map(std::function<T (const T& value)> mapper)
    {
       for (int i = 0; i < TSize; i++)
       {
@@ -403,17 +465,18 @@ public:
       }
 
       SetToDesiredValue();
+      return *this;
    }
 
    /**
     * @brief       Performs a given action for each element in the vector
     * @param       The action to perform for each element.
     */
-   virtual void ForEach(std::function<void(const T& value)> action)
+   virtual void ForEach(std::function<void(const T& value, size_t index)> action) const override
    {
       for (int i = 0; i < TSize; i++)
       {
-         action(mValue[i]);
+         action(mValue[i], i);
       }
    }
 
@@ -421,7 +484,7 @@ public:
     * @brief       Generates list values for each element based on the tabulation func.
     * @param       func  
     */
-   virtual void Tabulate(std::function<void(const T& oldValue, size_t index)> func)
+   virtual VectorState& Tabulate(std::function<T(const T& oldValue, size_t index)> func)
    {
       for (size_t i = 0; i < TSize; i++)
       {
@@ -429,6 +492,7 @@ public:
       }
 
       SetToDesiredValue();
+      return *this;
    }
 
 protected:
@@ -446,7 +510,7 @@ protected:
    /**
     * @return     True if desired value different, False otherwise.
     */
-   virtual bool IsDesiredValueDifferent() override
+   virtual bool IsDesiredValueDifferent() const override
    {
       for (size_t i = 0; i < TSize; i++)
       {
