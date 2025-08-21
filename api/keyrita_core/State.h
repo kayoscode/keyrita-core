@@ -285,6 +285,12 @@ public:
    virtual const std::span<const T> GetValue() = 0;
 
    /**
+    * @brief       Performs an action per element readonly
+    * @param       func  
+    */
+   virtual void ForEach(std::function<void(const T& value)> func) = 0;
+
+   /**
     * @brief      Returns the number of elements in this vector state.
     * This cannot be modified at runtime.
     *
@@ -308,8 +314,8 @@ public:
    VectorState(const T& defaultScalar)
       : mDefaultScalar(defaultScalar)
    {
-      // Set to default is still abstract at this level, someone has to override it to set the
-      // initial value.
+      // Ensure positive sizes.
+      static_assert(TSize >= 0);
       SetToDefault();
    }
 
@@ -333,6 +339,21 @@ public:
    {
       mDesiredValue[index] = value;
       SetToDesiredValue();
+   }
+
+   /**
+    * @brief       Sets all the values in the vector to the given value.
+    * @param       value  
+    */
+   virtual void SetAll(const T& value)
+   {
+      SetValues([value](std::span<T> data, size_t count) 
+      {
+         for (size_t i = 0; i < count; i++)
+         {
+            data[i] = value;
+         }
+      });
    }
 
    /**
@@ -360,6 +381,54 @@ public:
       }
 
       return true;
+   }
+
+   /**
+    * @brief       Sets every value to the default scalar
+    */
+   virtual void SetToDefault() override
+   {
+      SetAll(mDefaultScalar);
+   }
+
+   /**
+    * @brief       Transforms each value to a new value from the mapper func
+    * @param       mapper  
+    */
+   virtual void Map(std::function<T (const T& value)> mapper)
+   {
+      for (int i = 0; i < TSize; i++)
+      {
+         mDesiredValue[i] = mapper(mValue[i]);
+      }
+
+      SetToDesiredValue();
+   }
+
+   /**
+    * @brief       Performs a given action for each element in the vector
+    * @param       The action to perform for each element.
+    */
+   virtual void ForEach(std::function<void(const T& value)> action)
+   {
+      for (int i = 0; i < TSize; i++)
+      {
+         action(mValue[i]);
+      }
+   }
+
+   /**
+    * @brief       Generates list values for each element based on the tabulation func.
+    * @param       func  
+    */
+   virtual void Tabulate(std::function<void(const T& oldValue, size_t index)> func)
+   {
+      for (size_t i = 0; i < TSize; i++)
+      {
+         mDesiredValue[i] = func(mValue[i], i);
+      }
+
+      SetToDesiredValue();
    }
 
 protected:

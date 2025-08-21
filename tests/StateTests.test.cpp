@@ -122,6 +122,11 @@ TEST(StateTests, EnumStateTests)
    ASSERT_TRUE(enumState.IsAtDefault());
 }
 
+TEST(StateTests, VectorStateTests)
+{
+   VectorState<int, 30> testVectorState(1);
+}
+
 int main(int argc, char** argv)
 {
    testing::InitGoogleTest(&argc, argv);
