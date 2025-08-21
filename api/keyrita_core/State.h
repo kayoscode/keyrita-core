@@ -1,10 +1,9 @@
 #pragma once
 
-#include <array>
 #include <concepts>
 #include <cpp_events/Event.h>
+#include <cstring>
 #include <functional>
-#include <ios>
 #include <span>
 
 namespace kc
@@ -535,47 +534,63 @@ private:
 #pragma region Matrix state
 
 /**
- * Concept for indexing the matrix
+ * @return      Returns the number of dimensions given by a templated list of dims
  */
-template <size_t NumDims, size_t... TIdx>
-concept MatrixIndices = (sizeof...(TIdx) == NumDims);
-
-/**
- * @brief      Compute the total flat 
- *
- * @tparam     TFirstDim  { description }
- * @tparam     TDims      { description }
- *
- * @return     { description_of_the_return_value }
- */
-template <size_t TFirstDim, size_t... TDims> constexpr size_t TotalVecSize()
+template <size_t... TDims> constexpr int GetNumDims()
 {
-   static_assert(TFirstDim > 0, "Dimension has length zero.");
-   return TFirstDim * TotalVecSize<TDims...>();
+   return sizeof...(TDims);
 }
 
-template<typename T, size_t... Dims>
-struct NestedArray;
+template <size_t TDim> constexpr size_t TotalVecSize()
+{
+   return TDim;
+}
 
-template<typename T>
-struct NestedArray<T> {
-    using type = T;
-};
+template <size_t TFirstDim, size_t... TRemainingDims>
+   requires(sizeof...(TRemainingDims) > 0)
+constexpr size_t TotalVecSize()
+{
+   return TFirstDim * TotalVecSize<TRemainingDims...>();
+}
 
-// Recursive case: create array of inner NestedArray
-template<typename T, size_t FirstDim, size_t... RestDims>
-struct NestedArray<T, FirstDim, RestDims...> {
-    using type = std::array<typename NestedArray<T, RestDims...>::type, FirstDim>;
-};
+/**
+ * Concept for indexing the matrix
+ */
+template <size_t TNumDims, typename... Idx>
+concept MatrixIndices = (sizeof...(Idx) == TNumDims) && (std::convertible_to<Idx, size_t> && ...);
 
-template<typename T, size_t... Dims>
-using NestedArrayT = typename NestedArray<T, Dims...>::type;
+/**
+ * @brief      Base case to compute flat index.
+ */
+template <size_t TDim, typename TIdx> constexpr size_t ComputeFlatIndexRecursive(TIdx idx)
+{
+   return idx;
+}
+
+/**
+ * @brief      Recursive case for computing a flat index.
+ */
+template <size_t TDim, size_t... TRemainingDims, typename TIdx, typename... TRemainingIndices>
+constexpr size_t ComputeFlatIndexRecursive(TIdx idx, TRemainingIndices... remainingIndices)
+{
+   // Process current dimension, then recurse upward with updated stride
+   size_t stride = TotalVecSize<TRemainingDims...>();
+   return idx * stride + ComputeFlatIndexRecursive<TRemainingDims...>(remainingIndices...);
+}
+
+template <size_t... TDims, typename... TIdx>
+   requires MatrixIndices<sizeof...(TDims), TIdx...>
+constexpr size_t ComputeFlatIndex(TIdx... idx)
+{
+   return ComputeFlatIndexRecursive<TDims...>(idx...);
+}
 
 /**
  * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
  */
 template <ScalarStateValue T, size_t... TDims>
-class IMatrixState : public virtual IReadState
+class IMatrixState : public virtual IReadState,
+                     public virtual IVectorState<T, TotalVecSize<TDims...>()>
 {
 public:
    /**
@@ -583,11 +598,25 @@ public:
     */
    virtual size_t GetSize(int dim) const = 0;
 
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   size_t ToFlatIndex(TIdx... indices) const
+   {
+      return ComputeFlatIndex<TDims...>(indices...);
+   }
+
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T GetMatrixValue(TIdx... indices) const
+   {
+      return this->GetValue(ToFlatIndex(indices...));
+   }
+
    /**
     * @brief      Returns the total number of elements that appear in the matrix.
     * @return     The size.
     */
-   size_t GetSize() const 
+   size_t GetSize() const
    {
       return TotalVecSize<TDims...>();
    }
@@ -602,45 +631,33 @@ public:
 };
 
 template <ScalarStateValue T, size_t... TDims>
-class MatrixState : public virtual ReadWriteState, public virtual IMatrixState<T, TDims...>
+class MatrixState : public virtual IMatrixState<T, TDims...>,
+                    public virtual VectorState<T, TotalVecSize<TDims...>()>
 {
 public:
    /**
-    * @brief      Standard constructor. 
+    * @brief      Standard constructor.
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
    MatrixState(const T& defaultScalar)
-      : mDefaultScalar(defaultScalar)
+      : VectorState<T, TotalVecSize<TDims...>()>(defaultScalar)
    {
+   }
+
+   /**
+    * Sets a valid in the matrix
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   void SetMatrixValue(T value, TIdx... indices)
+   {
+      this->SetValue(value, this->ToFlatIndex(indices...));
    }
 
    size_t GetSize(int dim) const override
    {
       return 0;
    }
-
-   bool IsAtDefault() const override
-   {
-      return false;
-   }
-
-   void SetToDefault() override
-   {
-   }
-
-protected:
-   void ApplyDesiredValue() override
-   {
-   }
-
-   bool IsDesiredValueDifferent() const override
-   {
-      return true;
-   }
-
-   NestedArrayT<T, TDims...> mValue;
-   NestedArrayT<T, TDims...> mDesiredValue;
-   T mDefaultScalar;
 };
 }   // namespace kc

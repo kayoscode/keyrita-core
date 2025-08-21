@@ -5,8 +5,7 @@ using namespace kc;
 
 int main()
 {
-   MatrixState<double, 10, 10> matrix(10);
-   std::cout << matrix.GetNumDims() << "\n";
-
-   NestedArrayT<int, 1> nestedArray;
+   MatrixState<uint64_t, 8, 8, 8> matrix(10);
+   matrix.SetMatrixValue(100, 1, 2, 3);
+   std::cout << matrix.GetMatrixValue(1, 2, 3) << "\n";
 }
