@@ -1,8 +1,10 @@
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <cpp_events/Event.h>
 #include <functional>
+#include <ios>
 #include <span>
 
 namespace kc
@@ -173,7 +175,7 @@ concept ScalarStateValue = std::copyable<T> && std::equality_comparable<T>;
 
 #pragma region Scalar state
 
-template <ScalarStateValue T> class IScalarState : public virtual ReadState
+template <ScalarStateValue T> class IScalarState : public virtual IReadState
 {
 public:
    /**
@@ -266,7 +268,7 @@ private:
 
 #pragma region Vector state
 
-template <ScalarStateValue T, size_t TSize> class IVectorState : public virtual ReadState
+template <ScalarStateValue T, size_t TSize> class IVectorState : public virtual IReadState
 {
 public:
    /**
@@ -294,7 +296,7 @@ public:
 
    /**
     * @brief       Performs an action per element readonly
-    * @param       func  
+    * @param       func
     */
    virtual void ForEach(std::function<void(const T& value, size_t index)> func) const = 0;
 
@@ -329,8 +331,7 @@ public:
     *
     * @param[in]  defaultScalar  The default value for every element in the vector state.
     */
-   VectorState(const T& defaultScalar)
-      : mDefaultScalar(defaultScalar)
+   VectorState(const T& defaultScalar) : mDefaultScalar(defaultScalar)
    {
       // Need to have at least one element.
       static_assert(TSize > 0, "Invalid vector size");
@@ -338,7 +339,7 @@ public:
       SetToDefault();
    }
 
-   virtual T GetValue(size_t index) const override 
+   virtual T GetValue(size_t index) const override
    {
       assert(index < TSize);
       return this->mValue[index];
@@ -346,8 +347,8 @@ public:
 
    /**
     * @brief       Returns the value at the given index, no bounds checking.
-    * @param       index  
-    * @return      
+    * @param       index
+    * @return
     */
    virtual T operator[](size_t index) const override
    {
@@ -375,17 +376,18 @@ public:
 
    /**
     * @brief       Sets all the values in the vector to the given value.
-    * @param       value  
+    * @param       value
     */
    virtual VectorState& SetAll(const T& value)
    {
-      SetValues([value](std::span<T> data, size_t count) 
-      {
-         for (size_t i = 0; i < count; i++)
+      SetValues(
+         [value](std::span<T> data, size_t count)
          {
-            data[i] = value;
-         }
-      });
+            for (size_t i = 0; i < count; i++)
+            {
+               data[i] = value;
+            }
+         });
 
       return *this;
    }
@@ -439,7 +441,6 @@ public:
       return true;
    }
 
-
    virtual bool Any(std::function<bool(const T& value)> predicate) const override
    {
       for (int i = 0; i < TSize; i++)
@@ -455,9 +456,9 @@ public:
 
    /**
     * @brief       Transforms each value to a new value from the mapper func
-    * @param       mapper  
+    * @param       mapper
     */
-   virtual VectorState& Map(std::function<T (const T& value)> mapper)
+   virtual VectorState& Map(std::function<T(const T& value)> mapper)
    {
       for (int i = 0; i < TSize; i++)
       {
@@ -482,7 +483,7 @@ public:
 
    /**
     * @brief       Generates list values for each element based on the tabulation func.
-    * @param       func  
+    * @param       func
     */
    virtual VectorState& Tabulate(std::function<T(const T& oldValue, size_t index)> func)
    {
@@ -530,4 +531,116 @@ private:
 };
 
 #pragma endregion
+
+#pragma region Matrix state
+
+/**
+ * Concept for indexing the matrix
+ */
+template <size_t NumDims, size_t... TIdx>
+concept MatrixIndices = (sizeof...(TIdx) == NumDims);
+
+/**
+ * @brief      Compute the total flat 
+ *
+ * @tparam     TFirstDim  { description }
+ * @tparam     TDims      { description }
+ *
+ * @return     { description_of_the_return_value }
+ */
+template <size_t TFirstDim, size_t... TDims> constexpr size_t TotalVecSize()
+{
+   static_assert(TFirstDim > 0, "Dimension has length zero.");
+   return TFirstDim * TotalVecSize<TDims...>();
+}
+
+template<typename T, size_t... Dims>
+struct NestedArray;
+
+template<typename T>
+struct NestedArray<T> {
+    using type = T;
+};
+
+// Recursive case: create array of inner NestedArray
+template<typename T, size_t FirstDim, size_t... RestDims>
+struct NestedArray<T, FirstDim, RestDims...> {
+    using type = std::array<typename NestedArray<T, RestDims...>::type, FirstDim>;
+};
+
+template<typename T, size_t... Dims>
+using NestedArrayT = typename NestedArray<T, Dims...>::type;
+
+/**
+ * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
+ */
+template <ScalarStateValue T, size_t... TDims>
+class IMatrixState : public virtual IReadState
+{
+public:
+   /**
+    * @return     The size for the given dimension of the matrix.
+    */
+   virtual size_t GetSize(int dim) const = 0;
+
+   /**
+    * @brief      Returns the total number of elements that appear in the matrix.
+    * @return     The size.
+    */
+   size_t GetSize() const 
+   {
+      return TotalVecSize<TDims...>();
+   }
+
+   /**
+    * @return     The total number of dimensions available for this matrix.
+    */
+   int GetNumDims() const
+   {
+      return sizeof...(TDims);
+   }
+};
+
+template <ScalarStateValue T, size_t... TDims>
+class MatrixState : public virtual ReadWriteState, public virtual IMatrixState<T, TDims...>
+{
+public:
+   /**
+    * @brief      Standard constructor. 
+    *
+    * @param[in]  defaultScalar  The default value that initializes the matrix.
+    */
+   MatrixState(const T& defaultScalar)
+      : mDefaultScalar(defaultScalar)
+   {
+   }
+
+   size_t GetSize(int dim) const override
+   {
+      return 0;
+   }
+
+   bool IsAtDefault() const override
+   {
+      return false;
+   }
+
+   void SetToDefault() override
+   {
+   }
+
+protected:
+   void ApplyDesiredValue() override
+   {
+   }
+
+   bool IsDesiredValueDifferent() const override
+   {
+      return true;
+   }
+
+   NestedArrayT<T, TDims...> mValue;
+   NestedArrayT<T, TDims...> mDesiredValue;
+   T mDefaultScalar;
+};
 }   // namespace kc
