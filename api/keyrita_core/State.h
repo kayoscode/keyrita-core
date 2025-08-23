@@ -9,6 +9,7 @@
 #include <memory>
 #include <span>
 #include <utility>
+#include <wchar.h>
 
 namespace kc
 {
@@ -545,16 +546,21 @@ template <size_t... TDims> constexpr int GetNumDims()
    return sizeof...(TDims);
 }
 
-template <size_t TDim> constexpr size_t TotalVecSize()
+/**
+ * @return      Computes the total number of flat elements given the dimensions of them atrix
+ */
+template <size_t TFirstDim, size_t... TRemainingDims> constexpr size_t TotalVecSize()
 {
-   return TDim;
-}
-
-template <size_t TFirstDim, size_t... TRemainingDims>
-   requires(sizeof...(TRemainingDims) > 0)
-constexpr size_t TotalVecSize()
-{
-   return TFirstDim * TotalVecSize<TRemainingDims...>();
+   if constexpr (sizeof...(TRemainingDims) == 0)
+   {
+      return TFirstDim;
+   }
+   // Need the else clause or the compiler will try to evaluate TotalVecSize<> in the base case
+   // which is invalid.
+   else
+   {
+      return TFirstDim * TotalVecSize<TRemainingDims...>();
+   }
 }
 
 /**
@@ -643,7 +649,7 @@ concept MatrixMap = ScalarStateValue<T> && requires(TFunc predicate, const T& va
 template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
 concept MatrixImmutableWalkClient =
    MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, const T& value, TIdx... indices) {
-      { func(value, indices...) } -> std::same_as<void>;
+      { func(value, indices...) };
    };
 
 /**
@@ -657,7 +663,7 @@ concept MatrixImmutableWalkClient =
 template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
 concept MatrixMutableWalkClient =
    MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, T& value, TIdx... indices) {
-      { func(value, indices...) } -> std::same_as<void>;
+      { func(value, indices...) };
    };
 
 /**
@@ -801,6 +807,7 @@ private:
 template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
 {
 public:
+
    /**
     * @brief      Returns a readonly view of the data.
     *
@@ -809,60 +816,52 @@ public:
    virtual const std::span<const T, TotalVecSize<TDims...>()> GetValue() const = 0;
 
    /**
-    * @brief       Performs an action per element readonly.
-    * @param       The action to perform per element
-    */
+    * @return      The value at the given matrix index.
+    */   
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   const T& operator()(TIdx... indices)
+   {
+      return this->GetValue(ToFlatIndex(indices...));
+   }
+
    template <typename TFunc>
       requires MatrixImmutableWalkClient<T, TFunc, 0>
-   void ForEach(TFunc&& action) const
+   void ForEach(TFunc&& f) const
    {
-      // Walk through the array with no indices and perform the action.
-      ForEachImpl<MatrixWalkerNoIndices<T, TDims...>>(GetValue(), std::forward<TFunc>(action));
+      ForEachImpl<MatrixWalkerNoIndices<T, TDims...>>(GetValue(), std::forward<TFunc>(f));
    }
 
-   /**
-    * Performs foreach operation passing the flat index during iteration.
-    */
    template <typename TFunc>
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   void ForEach(TFunc&& action) const
+   void ForEach(TFunc&& f) const
    {
-      // Walk through the array with no indices and perform the action.
-      IMatrixState<T, TDims...>::ForEachImpl<MatrixWalkerFlatIndex<T, TDims...>>(
-         GetValue(), std::forward<TFunc>(action));
+      ForEachImpl<MatrixWalkerFlatIndex<T, TDims...>>(GetValue(), std::forward<TFunc>(f));
    }
 
-   /**
-    * Performs a foreach operation passing the matrix raw indices during iteration.
-    */
-   template <typename TFunc> void ForEach(TFunc&& action) const
+   template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      IMatrixState<T, TDims...>::ForEachImpl<MatrixWalkerMatrixIndices<T, TDims...>>(
-         GetValue(), std::forward<TFunc>(action));
+      ForEachImpl<MatrixWalkerMatrixIndices<T, TDims...>>(GetValue(), std::forward<TFunc>(f));
    }
 
-   /**
-    * @brief      Counts the number of elements in the matrix that match the predicate
-    *
-    * @param      predicate  The predicate
-    *
-    * @return     The total number of elements matching the predicate.
-    */
    template <typename TFunc>
-      requires MatrixPredicate<T, TFunc>
-   size_t CountIf(TFunc&& predicate) const
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   size_t CountIf(TFunc&& f) const
    {
-      size_t count = 0;
-      MatrixWalkerNoIndices<T, FlatSize>::WalkReadOnly(GetValue(),
-         [&count, predicate = std::forward<TFunc>(predicate)](const T& value)
-         {
-            if (predicate(value))
-            {
-               count++;
-            }
-         });
+      return CountIfImpl<MatrixWalkerNoIndices<T, TDims...>>(GetValue(), std::forward<TFunc>(f));
+   }
 
-      return count;
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   size_t CountIf(TFunc&& f) const
+   {
+      return CountIfImpl<MatrixWalkerFlatIndex<T, TDims...>>(GetValue(), std::forward<TFunc>(f));
+   }
+
+   template <typename TFunc> size_t CountIf(TFunc&& f) const
+   {
+      return CountIfImpl<MatrixWalkerMatrixIndices<T, TDims...>>(
+         GetValue(), std::forward<TFunc>(f));
    }
 
    /**
@@ -987,9 +986,29 @@ public:
 
 private:
    template <typename TWalker, typename TFunc>
-   void ForEachImpl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f) const
+   static constexpr void ForEachImpl(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
+      // Foreach is simple, we just execute the action using our given walker.
       TWalker::WalkReadOnly(matrixValues, std::forward<TFunc>(f));
+   }
+
+   template <typename TWalker, typename TFunc>
+   static constexpr size_t CountIfImpl(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   {
+      // Count the number of elements in the matrix that match the predicate.
+      size_t count = 0;
+      TWalker::WalkReadOnly(matrixValues,
+         [&count, predicate = std::forward<TFunc>(predicate)](const T& value, auto&&... indices)
+         {
+            if (predicate(value, indices...))
+            {
+               count++;
+            }
+         });
+
+      return count;
    }
 
    // Store the flat size of the array as a const in the base class.
@@ -1014,6 +1033,16 @@ public:
       mValue = std::make_unique<std::array<T, FlatSize>>();
       mDesiredValue = std::make_unique<std::array<T, FlatSize>>();
       SetToDefault();
+   }
+
+   /**
+    * @return      The value at the given matrix index.
+    */   
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T& operator()(TIdx... indices)
+   {
+      return mValue->at(this->ToFlatIndex(indices...));
    }
 
    /**
