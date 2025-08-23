@@ -1,10 +1,15 @@
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <cpp_events/Event.h>
+#include <cstddef>
 #include <cstring>
 #include <functional>
+#include <iostream>
+#include <memory>
 #include <span>
+#include <utility>
 
 namespace kc
 {
@@ -556,8 +561,8 @@ constexpr size_t TotalVecSize()
 /**
  * Concept for indexing the matrix
  */
-template <size_t TNumDims, typename... Idx>
-concept MatrixIndices = (sizeof...(Idx) == TNumDims) && (std::convertible_to<Idx, size_t> && ...);
+template <size_t TNumDims, typename... TIdx>
+concept MatrixIndices = (sizeof...(TIdx) == TNumDims) && (std::convertible_to<TIdx, size_t> && ...);
 
 /**
  * @brief      Base case to compute flat index.
@@ -585,32 +590,340 @@ constexpr size_t ComputeFlatIndex(TIdx... idx)
    return ComputeFlatIndexRecursive<TDims...>(idx...);
 }
 
+// Find compile time dimension size impl.
+template <size_t TRequestedDim, size_t TCurrentDim, size_t... TRemainingDims>
+   requires(TRequestedDim == 0)
+constexpr size_t GetDimSizeImpl()
+{
+   return TCurrentDim;
+}
+
+// Compile time GetDimensionImpl
+template <size_t TRequestedDim, size_t TCurrentDim, size_t... TRemainingDims>
+   requires(TRequestedDim > 0 && sizeof...(TRemainingDims) > 0)
+constexpr size_t GetDimSizeImpl()
+{
+   return TRequestedDim == 0 ? TCurrentDim : GetDimSizeImpl<TRequestedDim - 1, TRemainingDims...>();
+}
+
+// Concept for an action done over the entire matrix at once.
+template <typename T, typename TFunc>
+concept MatrixBulkAction =
+   ScalarStateValue<T> && requires(TFunc predicate, std::span<T> values, size_t count) {
+      { predicate(values, count) } -> std::same_as<void>;
+   };
+
+// Concept for an action done for each element in a matrix.
+template <typename T, typename TFunc>
+concept MatrixAction = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
+   { predicate(value) } -> std::same_as<void>;
+};
+
+// Concept for a predicate for each element in a matrix.
+template <typename T, typename TFunc>
+concept MatrixPredicate = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
+   { predicate(value) } -> std::convertible_to<bool>;
+};
+
+// Concept for a mapping operation for a matrix
+template <typename T, typename TFunc>
+concept MatrixMap = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
+   { predicate(value) } -> std::convertible_to<T>;
+};
+
+#pragma region Matrix Walkers
+
+/**
+ * @brief      Concept defining an immutable walk through the array (one call per element)
+ *
+ * @tparam     T         The type parameter of the matrix T
+ * @tparam     TNumDims  The number of dimensions in the matrix
+ * @tparam     TFunc     The function called per element
+ * @tparam     TIdx      The indices passed to the function.
+ */
+template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
+concept MatrixImmutableWalkClient =
+   MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, const T& value, TIdx... indices) {
+      { func(value, indices...) } -> std::same_as<void>;
+   };
+
+/**
+ * @brief      Concept defining a mutable walk through any matrix.
+ *
+ * @tparam     T         The type parameter of the matrix T
+ * @tparam     TNumDims  The number of dimensions in the matrix
+ * @tparam     TFunc     The function called per element
+ * @tparam     TIdx      The indices passed to the function.
+ */
+template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
+concept MatrixMutableWalkClient =
+   MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, T& value, TIdx... indices) {
+      { func(value, indices...) } -> std::same_as<void>;
+   };
+
+/**
+ * Matrix walker that iterates through each element in the matrix not maintaing any indices.
+ * Can handle both a mutable and immutable walk client.
+ */
+template <typename T, size_t... TDims> class MatrixWalkerNoIndices
+{
+public:
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   static void WalkReadOnly(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      Walk<const T>(matrixValues, std::forward<TFunc>(action));
+   }
+
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 0>
+   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      Walk<T>(matrixValues, std::forward<TFunc>(action));
+   }
+
+private:
+   template <typename TSpanType, typename TFunc>
+   constexpr static void Walk(
+      std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      for (TSpanType& value : matrixValues)
+      {
+         action(value);
+      }
+   }
+};
+
+/**
+ * @brief      Traverses a matrix using a callback which provides a single flat index.
+ * Num dims should always be 1 in this case.
+ *
+ * @tparam     T           The type used
+ * @tparam     TTotalSize  The flat size of the matrix
+ */
+template <typename T, size_t... TDims> class MatrixWalkerFlatIndex
+{
+public:
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   static void WalkReadOnly(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      Walk<const T>(matrixValues, std::forward<TFunc>(action));
+   }
+
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
+   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      Walk<T>(matrixValues, std::forward<TFunc>(action));
+   }
+
+private:
+   template <typename TSpanType, typename TFunc>
+   constexpr static void Walk(
+      std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   {
+      for (size_t i = 0; i < TotalVecSize<TDims...>(); i++)
+      {
+         action(matrixValues[i], i);
+      }
+   }
+};
+
+/**
+ * @brief      Traverses a matrix using a callback which provides n indices, one for each dimension
+ *
+ * @tparam     T           The type used
+ * @tparam     TTotalSize  The flat size of the matrix
+ * @tparam     TDims...    The list of dimensions and sizes known at compile time.
+ */
+template <typename T, size_t... TDims> struct MatrixWalkerMatrixIndices
+{
+   template <typename TFunc>
+   static void WalkReadOnly(std::span<const T, TotalVecSize<TDims...>()> values, TFunc&& func)
+   {
+      std::array<size_t, sizeof...(TDims)> dims{};
+      WalkImpl<const T, TFunc, 0, TDims...>(values, std::forward<TFunc>(func), dims);
+   }
+
+   template <typename TFunc>
+   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> values, TFunc&& func)
+   {
+      std::array<size_t, sizeof...(TDims)> dims{};
+      WalkImpl<T, TFunc, 0, TDims...>(values, std::forward<TFunc>(func), dims);
+   }
+
+private:
+   template <typename TSpanType, typename TFunc, size_t TCurrentDimIdx, size_t TFirstDim,
+      size_t... TRemainingDims>
+   static void WalkImpl(std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& func,
+      std::array<size_t, sizeof...(TDims)>& indices, size_t flatIdx = 0)
+   {
+      // Get the stride
+      size_t flatIdxStride = 1;
+
+      if constexpr (sizeof...(TRemainingDims) > 0)
+      {
+         flatIdxStride = TotalVecSize<TRemainingDims...>();
+      }
+
+      for (size_t i = 0; i < TFirstDim; i++)
+      {
+         indices[TCurrentDimIdx] = i;
+         if constexpr (sizeof...(TRemainingDims) > 0)
+         {
+            // Recursively call and generate the next dimension's index.
+            WalkImpl<TSpanType, TFunc, TCurrentDimIdx + 1, TRemainingDims...>(
+               matrixValues, std::forward<TFunc>(func), indices, flatIdx);
+         }
+         else
+         {
+            std::apply(
+               [&](auto... idx)
+               {
+                  func(matrixValues[flatIdx], idx...);
+               },
+               indices);
+         }
+
+         // Increase the offset by the stride to move to the next dimension.
+         flatIdx += flatIdxStride;
+      }
+   }
+};
+
+#pragma endregion
+
 /**
  * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
  */
-template <ScalarStateValue T, size_t... TDims>
-class IMatrixState : public virtual IReadState,
-                     public virtual IVectorState<T, TotalVecSize<TDims...>()>
+template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
 {
 public:
    /**
-    * @return     The size for the given dimension of the matrix.
+    * @brief      Returns a readonly view of the data.
+    *
+    * @return     The readonly data view as a span.
     */
-   virtual size_t GetSize(int dim) const = 0;
+   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValue() const = 0;
 
-   template <typename... TIdx>
-      requires MatrixIndices<sizeof...(TDims), TIdx...>
-   size_t ToFlatIndex(TIdx... indices) const
+   /**
+    * @brief       Performs an action per element readonly.
+    * @param       The action to perform per element
+    */
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   void ForEach(TFunc&& action) const
    {
-      return ComputeFlatIndex<TDims...>(indices...);
+      // Walk through the array with no indices and perform the action.
+      MatrixWalkerNoIndices<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
    }
 
+   /**
+    * Performs foreach operation passing the flat index during iteration.
+    */
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   void ForEach(TFunc&& action) const
+   {
+      // Walk through the array with no indices and perform the action.
+      MatrixWalkerFlatIndex<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
+   }
+
+   /**
+    * Performs a foreach operation passing the matrix raw indices during iteration.
+    */
+   template <typename TFunc> void ForEach(TFunc&& action) const
+   {
+      MatrixWalkerMatrixIndices<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
+   }
+
+   /**
+    * @brief      Counts the number of elements in the matrix that match the predicate
+    *
+    * @param      predicate  The predicate
+    *
+    * @return     The total number of elements matching the predicate.
+    */
+   template <typename TFunc>
+      requires MatrixPredicate<T, TFunc>
+   size_t CountIf(TFunc&& predicate) const
+   {
+      size_t count = 0;
+      MatrixWalkerNoIndices<T, FlatSize>::WalkReadOnly(GetValue(),
+         [&count, predicate = std::forward<TFunc>(predicate)](const T& value)
+         {
+            if (predicate(value))
+            {
+               count++;
+            }
+         });
+
+      return count;
+   }
+
+   /**
+    * @return      true if all values match the predicate
+    */
+   template <typename TFunc>
+      requires MatrixPredicate<T, TFunc>
+   bool All(TFunc&& predicate) const
+   {
+      std::span<const T, FlatSize> valueSpan = GetValue();
+
+      for (const T& v : valueSpan)
+      {
+         if (!predicate(v))
+         {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   /**
+    * @return      true if any of the values in the set match the predicate
+    */
+   template <typename TFunc>
+      requires MatrixPredicate<T, TFunc>
+   bool Any(TFunc&& predicate) const
+   {
+      std::span<const T, FlatSize> valueSpan = GetValue();
+
+      for (const T& v : valueSpan)
+      {
+         if (predicate(v))
+         {
+            return true;
+         }
+      }
+
+      return false;
+   }
+
+   /**
+    * @brief      Returns the value of the matrix at the given index pack
+    *
+    * @param[in]  indices  The indices
+    *
+    * @tparam     TIdx     The indices to get the value at.
+    *
+    * @return     The matrix value at the given index.
+    */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
    T GetMatrixValue(TIdx... indices) const
    {
       return this->GetValue(ToFlatIndex(indices...));
    }
+
+   /**
+    * @return      Returns the value of the matrix at the given flat index.
+    */
+   virtual T GetValue(size_t flatIndex) const = 0;
 
    /**
     * @brief      Returns the total number of elements that appear in the matrix.
@@ -628,11 +941,60 @@ public:
    {
       return sizeof...(TDims);
    }
+
+   /**
+    * @return     Returns the size of the given dimension. 0 being the first specified dimension.
+    */
+   size_t GetDimSize(size_t dimIndex) const
+   {
+      if (dimIndex < GetNumDims())
+      {
+         return mDimSizes[dimIndex];
+      }
+
+      return 0;
+   }
+
+   /**
+    * @brief      Finds the size of the given dimension as a compile time constant. 0 being the
+    * first specified dimension
+    *
+    * @return     The dim size at the given dimension
+    */
+   template <size_t TDimIndex> size_t GetDimSize() const
+   {
+      return GetDimSizeImpl<TDimIndex, TDims...>();
+   }
+
+   /**
+    * @return     Computes the flat index equivalent of the passed index pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   size_t ToFlatIndex(TIdx... indices) const
+   {
+      return ComputeFlatIndex<TDims...>(indices...);
+   }
+
+   /**
+    * @return     The total number of elements in this matrix.
+    */
+   size_t GetFlatSize() const
+   {
+      return FlatSize;
+   }
+
+protected:
+   // Store the flat size of the array as a const in the base class.
+   constexpr static size_t FlatSize = TotalVecSize<TDims...>();
+
+private:
+   // Statically for this type stores the dimensions for runtime use.
+   static constexpr int mDimSizes[sizeof...(TDims)]{TDims...};
 };
 
 template <ScalarStateValue T, size_t... TDims>
-class MatrixState : public virtual IMatrixState<T, TDims...>,
-                    public virtual VectorState<T, TotalVecSize<TDims...>()>
+class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
 {
 public:
    /**
@@ -641,8 +1003,72 @@ public:
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
    MatrixState(const T& defaultScalar)
-      : VectorState<T, TotalVecSize<TDims...>()>(defaultScalar)
+      : mDefaultScalar(defaultScalar), mValue(nullptr), mDesiredValue(nullptr)
    {
+      mValue = std::make_unique<std::array<T, FlatSize>>();
+      mDesiredValue = std::make_unique<std::array<T, FlatSize>>();
+      SetToDefault();
+   }
+
+   /**
+    * @brief      Returns a readonly view of the data.
+    *
+    * @return     The readonly data view as a span.
+    */
+   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValue() const override
+   {
+      return *mValue;
+   }
+
+   /**
+    * @return     True if at default, False otherwise.
+    */
+   virtual bool IsAtDefault() const override
+   {
+      for (size_t i = 0; i < FlatSize; i++)
+      {
+         if (mValue->at(i) != mDefaultScalar)
+         {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   /**
+    * @brief      Sets the current value to the default scalar for every element.
+    */
+   virtual void SetToDefault() override
+   {
+      for (size_t i = 0; i < FlatSize; i++)
+      {
+         mDesiredValue->at(i) = mDefaultScalar;
+      }
+
+      SetToDesiredValue();
+   }
+
+   /**
+    * @return     The value at a given flat index.
+    */
+   virtual T GetValue(size_t flatIndex) const override
+   {
+      return mValue->at(flatIndex);
+   }
+
+   /**
+    * @brief      Sets the value at a given flat index.
+    *
+    * @param[in]  value      The value
+    * @param[in]  flatIndex  The flat index
+    */
+   virtual void SetValue(const T& value, size_t flatIndex)
+   {
+      assert(flatIndex < this->FlatSize);
+
+      mDesiredValue->at(flatIndex) = value;
+      SetToDesiredValue();
    }
 
    /**
@@ -650,14 +1076,98 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   void SetMatrixValue(T value, TIdx... indices)
+   MatrixState<T, TDims...> SetMatrixValue(T value, TIdx... indices)
    {
       this->SetValue(value, this->ToFlatIndex(indices...));
+      return *this;
    }
 
-   size_t GetSize(int dim) const override
+   /**
+    * Maps every element in the matrix to a new value given only the current value.
+    */
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 0>
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
    {
-      return 0;
+      MatrixWalkerNoIndices<T, TDims...>::WalkReadWrite(
+         *mDesiredValue, std::forward<TFunc>(mapper));
+      SetToDesiredValue();
+      return *this;
    }
+
+   /**
+    * Maps every element in the matrix to a new value given the flat index.
+    */
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   {
+      MatrixWalkerFlatIndex<T, TDims...>::WalkReadWrite(
+         *mDesiredValue, std::forward<TFunc>(mapper));
+      SetToDesiredValue();
+      return *this;
+   }
+
+   /**
+    * Maps every element in the matrix to a new value given the entire matrix index.
+    */
+   template <typename TFunc> MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   {
+      MatrixWalkerMatrixIndices<T, TDims...>::WalkReadWrite(
+         *mDesiredValue, std::forward<TFunc>(mapper));
+      SetToDesiredValue();
+      return *this;
+   }
+
+   /**
+    * @brief      Sets many values and only updates the state and calls the changed callback once.
+    *
+    * @param[in]  setCallback  The set callback
+    *
+    * @return     Self
+    */
+   template <typename TFunc>
+      requires MatrixBulkAction<T, TFunc>
+   MatrixState<T, TDims...>& SetValues(TFunc&& setter)
+   {
+      setter(*mDesiredValue, FlatSize);
+      SetToDesiredValue();
+      return *this;
+   }
+
+   /**
+    * @brief      Sets every value in the matrix to the value
+    *
+    * @param[in]  value  The value
+    *
+    * @return     Self
+    */
+   MatrixState<T, TDims...>& SetValues(const T& value)
+   {
+      for (size_t i = 0; i < FlatSize; i++)
+      {
+         mDesiredValue[i] = value;
+      }
+
+      SetToDesiredValue();
+      return *this;
+   }
+
+private:
+   virtual bool IsDesiredValueDifferent() const override
+   {
+      return true;
+   }
+
+   virtual void ApplyDesiredValue() override
+   {
+      // Swap the pointers for more speed.
+      std::swap(mValue, mDesiredValue);
+   }
+
+   constexpr static size_t FlatSize = TotalVecSize<TDims...>();
+   std::unique_ptr<std::array<T, FlatSize>> mValue;
+   std::unique_ptr<std::array<T, FlatSize>> mDesiredValue;
+   T mDefaultScalar;
 };
 }   // namespace kc

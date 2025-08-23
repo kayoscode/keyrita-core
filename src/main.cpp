@@ -1,11 +1,32 @@
 #include "keyrita_core/State.h"
+#include "Timer.h"
+
 #include <iostream>
 
 using namespace kc;
 
 int main()
 {
-   MatrixState<uint64_t, 8, 8, 8> matrix(10);
-   matrix.SetMatrixValue(100, 1, 2, 3);
-   std::cout << matrix.GetMatrixValue(1, 2, 3) << "\n";
+   size_t sum = 0;
+   Timer t;
+   MatrixState<size_t, 30, 30, 30, 30, 30, 30> matrix(10);
+   std::cout << t.Milliseconds() << "\n";
+
+   t.Reset();
+
+   matrix.Map([&](size_t& value, size_t flatIndex)
+   {
+      value = flatIndex;
+   });
+
+   std::cout << t.Milliseconds() << "\n";
+   t.Reset();
+
+   matrix.ForEach([&sum](size_t value) 
+   {
+      sum += value;
+   });
+
+   std::cout << t.Milliseconds() << "\n";
+   std::cout << sum << "\n";
 }

@@ -17,6 +17,7 @@ set(SRC
 
 set(HEADERS
         private_include/DebugBreak.h
+        private_include/Timer.h
         api/keyrita_core/State.h
 )
 
