@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <span>
 #include <utility>
@@ -818,7 +817,7 @@ public:
    void ForEach(TFunc&& action) const
    {
       // Walk through the array with no indices and perform the action.
-      MatrixWalkerNoIndices<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
+      ForEachImpl<MatrixWalkerNoIndices<T, TDims...>>(GetValue(), std::forward<TFunc>(action));
    }
 
    /**
@@ -829,7 +828,8 @@ public:
    void ForEach(TFunc&& action) const
    {
       // Walk through the array with no indices and perform the action.
-      MatrixWalkerFlatIndex<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
+      IMatrixState<T, TDims...>::ForEachImpl<MatrixWalkerFlatIndex<T, TDims...>>(
+         GetValue(), std::forward<TFunc>(action));
    }
 
    /**
@@ -837,7 +837,8 @@ public:
     */
    template <typename TFunc> void ForEach(TFunc&& action) const
    {
-      MatrixWalkerMatrixIndices<T, TDims...>::WalkReadOnly(GetValue(), std::forward<TFunc>(action));
+      IMatrixState<T, TDims...>::ForEachImpl<MatrixWalkerMatrixIndices<T, TDims...>>(
+         GetValue(), std::forward<TFunc>(action));
    }
 
    /**
@@ -984,13 +985,18 @@ public:
       return FlatSize;
    }
 
-protected:
+private:
+   template <typename TWalker, typename TFunc>
+   void ForEachImpl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f) const
+   {
+      TWalker::WalkReadOnly(matrixValues, std::forward<TFunc>(f));
+   }
+
    // Store the flat size of the array as a const in the base class.
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
 
-private:
    // Statically for this type stores the dimensions for runtime use.
-   static constexpr int mDimSizes[sizeof...(TDims)]{TDims...};
+   static constexpr const int mDimSizes[sizeof...(TDims)]{TDims...};
 };
 
 template <ScalarStateValue T, size_t... TDims>
