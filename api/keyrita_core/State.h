@@ -640,6 +640,31 @@ public:
          GetValue(), std::forward<TFunc>(predicate));
    }
 
+   // Fold
+
+   template <typename TFunc>
+      requires MatrixFoldClient<T, TFunc, 0>
+   T Fold(const T& initialValue, TFunc&& func) const
+   {
+      return MatrixFoldQuery::Impl<T, TFunc, WalkerNone, TDims...>(initialValue,
+         GetValue(), std::forward<TFunc>(func));
+   }
+
+   template <typename TFunc>
+      requires MatrixFoldClient<T, TFunc, 1, size_t>
+   T Fold(const T& initialValue, TFunc&& func) const
+   {
+      return MatrixFoldQuery::Impl<T, TFunc, WalkerFlat, TDims...>(initialValue,
+         GetValue(), std::forward<TFunc>(func));
+   }
+
+   template <typename TFunc>
+   T Fold(const T& initialValue, TFunc&& func) const
+   {
+      return MatrixFoldQuery::Impl<T, TFunc, WalkerInds, TDims...>(initialValue,
+         GetValue(), std::forward<TFunc>(func));
+   }
+
    /**
     * @brief      Returns the value of the matrix at the given index pack
     *

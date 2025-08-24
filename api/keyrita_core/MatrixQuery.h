@@ -130,7 +130,21 @@ concept MatrixMutableWalkClient =
    };
 
 /**
- * Matrix walker that iterates through each element in the matrix not maintaing any indices.
+ * @brief      Concept defining the function parameters required for a fold operation.
+ *
+ * @tparam     T         The type parameter of the matrix T
+ * @tparam     TNumDims  The number of dimensions in the matrix
+ * @tparam     TFunc     The function called per element
+ * @tparam     TIdx      The indices passed to the function.
+ */
+template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
+concept MatrixFoldClient =
+   MatrixIndices<TNumDims, TIdx...> && requires(const T& initialValue, TFunc func, const T& value, TIdx... indices) {
+      { func(initialValue, value, indices...) } -> std::same_as<T>;
+   };
+
+/**
+ * Matrix walker that iterates through each element in the matrix not maintaining any indices.
  * Can handle both a mutable and immutable walk client.
  */
 template <typename T, size_t... TDims> class MatrixWalkerNoIndices
@@ -318,11 +332,10 @@ private:
          flatIdx += flatIdxStride;
       }
 
-      // No cancel if we iterate through normall.
+      // No cancel if we iterate through normal.
       return true;
    }
 };
-
 
 /**
  * @brief      Implements the foreach functional pattern.
@@ -337,10 +350,11 @@ public:
    template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
    static constexpr void Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
-      // Count the number of elements in the matrix that match the predicate.
       TWalker::WalkReadOnly(matrixValues,
          [f = std::forward<TFunc>(f)](const T& value, auto&&... indices)
          {
+            // Here we discard any potential return value from the function to prevent any kind of
+            // cancellation.
             f(value, indices...);
          });
    }
@@ -439,4 +453,29 @@ public:
       return result;
    }
 };
-}
+
+/**
+ * @brief      Implements fold across a set of values in the given matrix. 
+ * [](const T& acc, const T& value, indices...) -> T;
+ *
+ * @tparam     T      The type on which to operate.
+ * @tparam     TDims  The static dimensions of the matrix.
+ */
+class MatrixFoldQuery
+{
+public:
+   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   static T Impl(const T& initialValue, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
+   {
+      T acc = initialValue;
+
+      TWalker::WalkReadOnly(matrixValues,
+         [&acc, func = std::forward<TFunc>(func)](const T& value, auto&&... indices)
+         {
+            acc = func(acc, value, indices...);
+         });
+
+      return acc;
+   }
+};
+}   // namespace kc

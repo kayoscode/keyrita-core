@@ -15,19 +15,15 @@ int main()
       {
          value = idx;
       });
-   std::cout << t.Milliseconds() << "\n";
-   t.Reset();
 
-   std::cout << t.Milliseconds() << "\n";
-   t.Reset();
-
-   std::cout << matrix.All([](size_t value, size_t idx)
+   // Compute the sum using a fold.
+   size_t count = matrix.Fold(0, [](size_t acc, size_t value)
    {
-      return value != idx;
-   }) << "\n";
+      acc += value < 40;
+      return acc;
+   });
 
-   std::cout << t.Milliseconds() << "\n";
-   t.Reset();
+   std::cout << count << "\n";
 }
 
 void SyntaxTest()
