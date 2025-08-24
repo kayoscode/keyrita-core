@@ -85,24 +85,6 @@ concept MatrixBulkAction =
       { predicate(values, count) } -> std::same_as<void>;
    };
 
-// Concept for an action done for each element in a matrix.
-template <typename T, typename TFunc>
-concept MatrixAction = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
-   { predicate(value) } -> std::same_as<void>;
-};
-
-// Concept for a predicate for each element in a matrix.
-template <typename T, typename TFunc>
-concept MatrixPredicate = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
-   { predicate(value) } -> std::convertible_to<bool>;
-};
-
-// Concept for a mapping operation for a matrix
-template <typename T, typename TFunc>
-concept MatrixMap = ScalarStateValue<T> && requires(TFunc predicate, const T& value) {
-   { predicate(value) } -> std::convertible_to<T>;
-};
-
 /**
  * @brief      Concept defining an immutable walk through the array (one call per element)
  *
@@ -440,8 +422,8 @@ class MatrixFoldQuery
 public:
    template <typename TFoldResult, ScalarStateValue T, typename TFunc, typename TWalker,
       size_t... TDims>
-   static void Impl(TFoldResult& acc,
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
+   static void Impl(
+      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
    {
       TWalker::WalkReadOnly(matrixValues,
          [&acc, func = std::forward<TFunc>(func)](const T& value, auto&&... indices)
@@ -467,8 +449,8 @@ public:
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       size_t acc = 0;
-      MatrixFoldQuery::Impl<size_t, T, std::function<void(size_t&, const T&)>, TWalker,
-         TDims...>(acc, matrixValues,
+      MatrixFoldQuery::Impl<size_t, T, std::function<void(size_t&, const T&)>, TWalker, TDims...>(
+         acc, matrixValues,
          [predicate = std::forward<TFunc>(predicate)](size_t& acc, const T& value)
          {
             if (predicate(value))
@@ -478,6 +460,28 @@ public:
          });
 
       return acc;
+   }
+};
+
+/**
+ * @brief      Implements the map operator. Takes in one value and transforms it to another value.
+ * [](T& value, indices...)
+ *
+ * @tparam     T      The type on which to operate.
+ * @tparam     TDims  The static dimensions of the matrix.
+ */
+class MatrixMap
+{
+public:
+   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   static constexpr void Impl(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   {
+      TWalker::WalkReadWrite(matrixValues,
+         [f = std::forward<TFunc>(f)](T& value, auto&&... indices)
+         {
+            // Discard any cancellation return, the value is set inside the function
+            f(value, indices...);
+         });
    }
 };
 }   // namespace kc

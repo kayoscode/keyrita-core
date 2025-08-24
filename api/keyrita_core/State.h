@@ -665,8 +665,6 @@ public:
          initialValue, GetValue(), std::forward<TFunc>(func));
    }
 
-   // Sum
-
    /**
     * @brief      Returns the value of the matrix at the given index pack
     *
@@ -859,39 +857,30 @@ public:
       return *this;
    }
 
-   /**
-    * Maps every element in the matrix to a new value given only the current value.
-    */
+   // Map
+
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 0>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
    {
-      MatrixWalkerNoIndices<T, TDims...>::WalkReadWrite(
-         *mDesiredValue, std::forward<TFunc>(mapper));
+      MatrixMap::Impl<T, TFunc, WalkerNone, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
       return *this;
    }
 
-   /**
-    * Maps every element in the matrix to a new value given the flat index.
-    */
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
    {
-      MatrixWalkerFlatIndex<T, TDims...>::WalkReadWrite(
-         *mDesiredValue, std::forward<TFunc>(mapper));
+      MatrixMap::Impl<T, TFunc, WalkerFlat, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
       return *this;
    }
 
-   /**
-    * Maps every element in the matrix to a new value given the entire matrix index.
-    */
-   template <typename TFunc> MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   template <typename TFunc>
+   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
    {
-      MatrixWalkerMatrixIndices<T, TDims...>::WalkReadWrite(
-         *mDesiredValue, std::forward<TFunc>(mapper));
+      MatrixMap::Impl<T, TFunc, WalkerInds, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
       return *this;
    }
@@ -946,5 +935,10 @@ private:
    std::unique_ptr<std::array<T, FlatSize>> mValue;
    std::unique_ptr<std::array<T, FlatSize>> mDesiredValue;
    T mDefaultScalar;
+
+   // Available walkers.
+   using WalkerNone = MatrixWalkerNoIndices<T, TDims...>;
+   using WalkerFlat = MatrixWalkerFlatIndex<T, TDims...>;
+   using WalkerInds = MatrixWalkerMatrixIndices<T, TDims...>;
 };
 }   // namespace kc
