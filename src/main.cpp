@@ -13,20 +13,19 @@ int main()
 
    Timer t;
    matrix.Map(
-      [&matrix](mat_t& value, size_t x, size_t y, size_t z)
+      [&matrix](mat_t& value, size_t idx)
       {
-         value = matrix.ToFlatIndex(x, y, z);
+         value = idx;
       });
 
    size_t flatIdx;
-   size_t i;
-   size_t j;
-   size_t k;
-   bool result = matrix.FindIf([&matrix](mat_t value, size_t flatIdx)
+   size_t x;
+   size_t y;
+   size_t z;
+   bool result = matrix.FindIf([&matrix](mat_t value, size_t x, size_t y, size_t z)
    {
-      std::cout << value << "\n";
-      return false;
-   }, i, j, k);
+      return value == 0;
+   }, x, y, z);
 
    std::cout << result << "\n";
 }

@@ -517,7 +517,7 @@ public:
    /**
     * @brief      Call predicate with all indices.
     */
-   template <ScalarStateValue T, typename TFunc, size_t TNumPredicateArgs, size_t... TDims, typename... TIdx>
+   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
    static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
    {
@@ -529,7 +529,7 @@ public:
     * @brief      Call predicate with flat index.
     */
    template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, size_t>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) != 1)
    static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
    {
       // It takes in a single flat index, so compute that here.
