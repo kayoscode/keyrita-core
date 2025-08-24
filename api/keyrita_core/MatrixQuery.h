@@ -5,6 +5,8 @@
 #include <functional>
 #include <span>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 
 namespace kc
 {
@@ -460,6 +462,89 @@ public:
          });
 
       return acc;
+   }
+};
+
+/**
+ * @brief      Implements the FindIf functional call. Returns the flat or matrix indices of the
+ * first found element matching the predicate.
+ * [](const T& value, indices...) -> bool;
+ *
+ * @tparam     T      The type on which to operate.
+ * @tparam     TDims  The static dimensions of the matrix.
+ */
+class MatrixFindIfQuery
+{
+public:
+   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+      requires(sizeof...(TIdx) > 0)
+   static constexpr bool Impl(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate, TIdx&... outIdx)
+   {
+      bool found = false;
+
+      // Always walk through with the all indices walker. Pass those indices to the predicate if
+      // possible, otherwise pass nothing. Compute the flat index if we find the right result and
+      // store it in the output indices.
+
+      MatrixWalkerMatrixIndices<T, TDims...>::WalkReadOnly(matrixValues,
+         [&found, &predicate](const T& value, auto... indices)
+         {
+            // Query the predicate value.
+            if (CallPredicateHelper<T, TFunc, TDims...>(
+               value, std::forward<TFunc>(predicate), indices...))
+            {
+               if constexpr (sizeof...(TIdx) == 1)
+               {
+                  // Pack just the flat index.
+               }
+               else
+               {
+                  // Pack all the indices.
+               }
+
+               // Return false to cancel.
+               found = true;
+               return false;
+            }
+
+            return true;
+         });
+
+      return found;
+   }
+
+   /**
+    * @brief      Call predicate with all indices.
+    */
+   template <ScalarStateValue T, typename TFunc, size_t TNumPredicateArgs, size_t... TDims, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   {
+      // Pass all the indices directly.
+      return predicate(value, indices...);
+   }
+
+   /**
+    * @brief      Call predicate with flat index.
+    */
+   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t>
+   static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   {
+      // It takes in a single flat index, so compute that here.
+      return predicate(value, ComputeFlatIndex<TDims...>(indices...));
+   }
+
+   /**
+    * @brief      Call predicate with flat index.
+    */
+   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   {
+      // It takes in a single flat index, so compute that here.
+      return predicate(value);
    }
 };
 

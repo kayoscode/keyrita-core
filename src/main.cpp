@@ -18,16 +18,17 @@ int main()
          value = matrix.ToFlatIndex(x, y, z);
       });
 
-   std::vector<mat_t> flattened;
-   matrix.Fold(flattened, [](std::vector<mat_t>& acc, mat_t value)
+   size_t flatIdx;
+   size_t i;
+   size_t j;
+   size_t k;
+   bool result = matrix.FindIf([&matrix](mat_t value, size_t flatIdx)
    {
-      acc.push_back(value);
-   });
+      std::cout << value << "\n";
+      return false;
+   }, i, j, k);
 
-   for (size_t i = 0; i < flattened.size(); i++)
-   {
-      std::cout << flattened[i] << "\n";
-   }
+   std::cout << result << "\n";
 }
 
 void SyntaxTest()

@@ -665,6 +665,16 @@ public:
          initialValue, GetValue(), std::forward<TFunc>(func));
    }
 
+   // FindIf
+
+   template <typename TFunc, typename... TIdx>
+      requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
+   bool FindIf(TFunc&& predicate, TIdx&... indices) const
+   {
+      return MatrixFindIfQuery::Impl<T, TFunc, TDims...>(
+         GetValue(), std::forward<TFunc>(predicate), indices...);
+   }
+
    /**
     * @brief      Returns the value of the matrix at the given index pack
     *
@@ -861,7 +871,7 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 0>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
    {
       MatrixMap::Impl<T, TFunc, WalkerNone, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
@@ -870,15 +880,14 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
    {
       MatrixMap::Impl<T, TFunc, WalkerFlat, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
       return *this;
    }
 
-   template <typename TFunc>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper) 
+   template <typename TFunc> MatrixState<T, TDims...>& Map(TFunc&& mapper)
    {
       MatrixMap::Impl<T, TFunc, WalkerInds, TDims...>(*mDesiredValue, std::forward<TFunc>(mapper));
       SetToDesiredValue();
