@@ -1,6 +1,8 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
+#include <functional>
 #include <span>
 #include <tuple>
 
@@ -131,16 +133,18 @@ concept MatrixMutableWalkClient =
 
 /**
  * @brief      Concept defining the function parameters required for a fold operation.
+ * [](const TFoldType& acc, const T& value, indices...) -> TFoldType
  *
  * @tparam     T         The type parameter of the matrix T
  * @tparam     TNumDims  The number of dimensions in the matrix
  * @tparam     TFunc     The function called per element
  * @tparam     TIdx      The indices passed to the function.
  */
-template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
+template <typename TFoldType, typename T, typename TFunc, size_t TNumDims, typename... TIdx>
 concept MatrixFoldClient =
-   MatrixIndices<TNumDims, TIdx...> && requires(const T& initialValue, TFunc func, const T& value, TIdx... indices) {
-      { func(initialValue, value, indices...) } -> std::same_as<T>;
+   MatrixIndices<TNumDims, TIdx...> &&
+   requires(TFoldType& initialValue, TFunc func, const T& value, TIdx... indices) {
+      { func(initialValue, value, indices...) };
    };
 
 /**
@@ -361,36 +365,6 @@ public:
 };
 
 /**
- * @brief      Implements the CountIf functional pattern. Each element that passes the predicate
- * increments a counter which is returned.
- * [](const T& value, indices...) -> bool;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-class MatrixCountIf
-{
-public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
-   static constexpr size_t Impl(
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      // Count the number of elements in the matrix that match the predicate.
-      size_t count = 0;
-      TWalker::WalkReadOnly(matrixValues,
-         [&count, predicate = std::forward<TFunc>(predicate)](const T& value, auto&&... indices)
-         {
-            if (predicate(value, indices...))
-            {
-               count++;
-            }
-         });
-
-      return count;
-   }
-};
-
-/**
  * @brief      Implements the All functional pattern. If all selected elements return true for the
  * predicate true is returned, false otherwise.
  * [](const T& value, indices...) -> bool;
@@ -455,7 +429,7 @@ public:
 };
 
 /**
- * @brief      Implements fold across a set of values in the given matrix. 
+ * @brief      Implements fold across a set of values in the given matrix.
  * [](const T& acc, const T& value, indices...) -> T;
  *
  * @tparam     T      The type on which to operate.
@@ -464,15 +438,43 @@ public:
 class MatrixFoldQuery
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
-   static T Impl(const T& initialValue, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
+   template <typename TFoldResult, ScalarStateValue T, typename TFunc, typename TWalker,
+      size_t... TDims>
+   static void Impl(TFoldResult& acc,
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
    {
-      T acc = initialValue;
-
       TWalker::WalkReadOnly(matrixValues,
          [&acc, func = std::forward<TFunc>(func)](const T& value, auto&&... indices)
          {
-            acc = func(acc, value, indices...);
+            func(acc, value, indices...);
+         });
+   }
+};
+
+/**
+ * @brief      Implements the CountIf functional pattern. Each element that passes the predicate
+ * increments a counter which is returned.
+ * [](const T& value, indices...) -> bool;
+ *
+ * @tparam     T      The type on which to operate.
+ * @tparam     TDims  The static dimensions of the matrix.
+ */
+class MatrixCountIf
+{
+public:
+   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   static constexpr size_t Impl(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   {
+      size_t acc = 0;
+      MatrixFoldQuery::Impl<size_t, T, std::function<void(size_t&, const T&)>, TWalker,
+         TDims...>(acc, matrixValues,
+         [predicate = std::forward<TFunc>(predicate)](size_t& acc, const T& value)
+         {
+            if (predicate(value))
+            {
+               acc++;
+            }
          });
 
       return acc;

@@ -642,28 +642,30 @@ public:
 
    // Fold
 
-   template <typename TFunc>
-      requires MatrixFoldClient<T, TFunc, 0>
-   T Fold(const T& initialValue, TFunc&& func) const
+   template <typename TFoldResult = T, typename TFunc>
+      requires MatrixFoldClient<TFoldResult, T, TFunc, 0>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      return MatrixFoldQuery::Impl<T, TFunc, WalkerNone, TDims...>(initialValue,
-         GetValue(), std::forward<TFunc>(func));
+      MatrixFoldQuery::Impl<TFoldResult, T, TFunc, WalkerNone, TDims...>(
+         initialValue, GetValue(), std::forward<TFunc>(func));
    }
 
-   template <typename TFunc>
-      requires MatrixFoldClient<T, TFunc, 1, size_t>
-   T Fold(const T& initialValue, TFunc&& func) const
+   template <typename TFoldResult = T, typename TFunc>
+      requires MatrixFoldClient<TFoldResult, T, TFunc, 1, size_t>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      return MatrixFoldQuery::Impl<T, TFunc, WalkerFlat, TDims...>(initialValue,
-         GetValue(), std::forward<TFunc>(func));
+      MatrixFoldQuery::Impl<TFoldResult, T, TFunc, WalkerFlat, TDims...>(
+         initialValue, GetValue(), std::forward<TFunc>(func));
    }
 
-   template <typename TFunc>
-   T Fold(const T& initialValue, TFunc&& func) const
+   template <typename TFoldResult = T, typename TFunc>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      return MatrixFoldQuery::Impl<T, TFunc, WalkerInds, TDims...>(initialValue,
-         GetValue(), std::forward<TFunc>(func));
+      MatrixFoldQuery::Impl<TFoldResult, T, TFunc, WalkerInds, TDims...>(
+         initialValue, GetValue(), std::forward<TFunc>(func));
    }
+
+   // Sum
 
    /**
     * @brief      Returns the value of the matrix at the given index pack
