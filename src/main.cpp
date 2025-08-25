@@ -11,12 +11,10 @@ int main()
 {
    MatrixState<mat_t, 3, 3, 3> matrix(10);
 
+   std::cout << matrix.IsAtDefault() << "\n";
+
    Timer t;
-   matrix.Map(
-      [&matrix](mat_t& value, size_t idx)
-      {
-         value = idx;
-      });
+   matrix.SetValues(0);
 
    size_t flatIdx;
    size_t x;
@@ -28,35 +26,4 @@ int main()
    }, x, y, z);
 
    std::cout << result << "\n";
-}
-
-void SyntaxTest()
-{
-   MatrixState<size_t, 3, 3, 3> matrix(10);
-
-   matrix.Map(
-      [&](size_t& value)
-      {
-         value = 0;
-      });
-
-   matrix.Map(
-      [&](size_t& value, size_t x, size_t y, size_t z)
-      {
-         value = 0;
-      });
-
-   matrix.Map(
-      [&](size_t& value, size_t idx)
-      {
-         value = idx;
-      });
-
-   //Compute the sum using a fold.
-   size_t count = matrix.CountIf([](mat_t value)
-   {
-      return value < 10;
-   });
-
-   std::cout << count << "\n";
 }

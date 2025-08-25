@@ -88,6 +88,21 @@ template <typename TMatrix, typename T> size_t CountEqual(const TMatrix& matrix,
       });
 }
 
+/**
+ * @return     Copies the matrix to a flat vector.
+ */
+template <typename TMatrix, typename T = TMatrix::value_type> std::vector<T> Flatten(const TMatrix& matrix)
+{
+   std::vector<T> result;
+
+   matrix.Fold(result, [](auto& acc, const T& value)
+   {
+      acc.push_back(value);
+   });
+
+   return result;
+}
+
 // Arithmetic
 
 /**

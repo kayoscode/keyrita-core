@@ -26,6 +26,8 @@ template <size_t... TDims> constexpr int GetNumDims()
  */
 template <size_t TFirstDim, size_t... TRemainingDims> constexpr size_t TotalVecSize()
 {
+   static_assert(TFirstDim > 0, "Each dimension must be greater than zero");
+
    if constexpr (sizeof...(TRemainingDims) == 0)
    {
       return TFirstDim;
@@ -332,10 +334,10 @@ private:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixForEach
+template <ScalarStateValue T, size_t... TDims> class MatrixForEach
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   template <typename TWalker, typename TFunc>
    static constexpr void Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       TWalker::WalkReadOnly(matrixValues,
@@ -356,10 +358,10 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixAllQuery
+template <ScalarStateValue T, size_t... TDims> class MatrixAllQuery
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   template <typename TWalker, typename TFunc>
    static bool Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result = true;
@@ -388,10 +390,10 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixAnyQuery
+template <ScalarStateValue T, size_t... TDims> class MatrixAnyQuery
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   template <typename TWalker, typename TFunc>
    static bool Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result = false;
@@ -403,9 +405,10 @@ public:
             if (predicate(value, indices...))
             {
                result = true;
+               return false;
             }
 
-            return result;
+            return true;
          });
 
       return result;
@@ -419,11 +422,10 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixFoldQuery
+template <ScalarStateValue T, size_t... TDims> class MatrixFoldQuery
 {
 public:
-   template <typename TFoldResult, ScalarStateValue T, typename TFunc, typename TWalker,
-      size_t... TDims>
+   template <typename TWalker, typename TFoldResult, typename TFunc>
    static void Impl(
       TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
    {
@@ -443,19 +445,18 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixCountIf
+template <ScalarStateValue T, size_t... TDims> class MatrixCountIf
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   template <typename TWalker, typename TFunc>
    static constexpr size_t Impl(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       size_t acc = 0;
-      MatrixFoldQuery::Impl<size_t, T, std::function<void(size_t&, const T&)>, TWalker, TDims...>(
-         acc, matrixValues,
-         [predicate = std::forward<TFunc>(predicate)](size_t& acc, const T& value)
+      MatrixFoldQuery<T, TDims...>::template Impl<TWalker, size_t>(acc, matrixValues,
+         [predicate = std::forward<TFunc>(predicate)](size_t& acc, const T& value, auto... indices)
          {
-            if (predicate(value))
+            if (predicate(value, indices...))
             {
                acc++;
             }
@@ -473,10 +474,10 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixFindIfQuery
+template <ScalarStateValue T, size_t... TDims> class MatrixFindIfQuery
 {
 public:
-   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+   template <typename TFunc, typename... TIdx>
       requires(sizeof...(TIdx) > 0)
    static constexpr bool Impl(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate, TIdx&... outIdx)
@@ -488,19 +489,20 @@ public:
       // store it in the output indices.
 
       MatrixWalkerMatrixIndices<T, TDims...>::WalkReadOnly(matrixValues,
-         [&found, &predicate](const T& value, auto... indices)
+         [&found, &predicate, &outIdx...](const T& value, auto... indices)
          {
             // Query the predicate value.
-            if (CallPredicateHelper<T, TFunc, TDims...>(
-               value, std::forward<TFunc>(predicate), indices...))
+            if (CallPredicateHelper(value, std::forward<TFunc>(predicate), indices...))
             {
-               if constexpr (sizeof...(TIdx) == 1)
+               if constexpr (sizeof...(TIdx) == sizeof...(indices))
                {
-                  // Pack just the flat index.
+                  // Pack all the indices.
+                  ((outIdx = indices), ...);
                }
                else
                {
-                  // Pack all the indices.
+                  // Convert to a flat index and set it.
+                  PackSingleIndex(outIdx..., ComputeFlatIndex<TDims...>(indices...));
                }
 
                // Return false to cancel.
@@ -514,10 +516,15 @@ public:
       return found;
    }
 
+   static constexpr void PackSingleIndex(size_t& outIdx, size_t index)
+   {
+      outIdx = index;
+   }
+
    /**
     * @brief      Call predicate with all indices.
     */
-   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+   template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
    static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
    {
@@ -528,7 +535,7 @@ public:
    /**
     * @brief      Call predicate with flat index.
     */
-   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+   template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) != 1)
    static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
    {
@@ -539,7 +546,7 @@ public:
    /**
     * @brief      Call predicate with flat index.
     */
-   template <ScalarStateValue T, typename TFunc, size_t... TDims, typename... TIdx>
+   template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
    static constexpr bool CallPredicateHelper(const T& value, TFunc&& predicate, TIdx... indices)
    {
@@ -555,10 +562,10 @@ public:
  * @tparam     T      The type on which to operate.
  * @tparam     TDims  The static dimensions of the matrix.
  */
-class MatrixMap
+template <ScalarStateValue T, size_t... TDims> class MatrixMap
 {
 public:
-   template <ScalarStateValue T, typename TFunc, typename TWalker, size_t... TDims>
+   template <typename TWalker, typename TFunc>
    static constexpr void Impl(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       TWalker::WalkReadWrite(matrixValues,
