@@ -12,12 +12,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(SRC
         src/main.cpp
-        src/State.cpp
 )
 
 set(HEADERS
         private_include/DebugBreak.h
+        private_include/Timer.h
+
         api/keyrita_core/State.h
+        api/keyrita_core/MatrixQuery.h
+        api/keyrita_core/MatrixUtils.h
 )
 
 # External libs

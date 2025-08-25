@@ -1,9 +1,14 @@
 #pragma once
 
-#include <concepts>
+#include "MatrixQuery.h"
+
+#include <array>
 #include <cpp_events/Event.h>
-#include <functional>
+#include <cstddef>
+#include <cstring>
 #include <span>
+#include <utility>
+#include <wchar.h>
 
 namespace kc
 {
@@ -51,10 +56,6 @@ public:
    virtual bool IsAtDefault() const = 0;
 
 protected:
-   /**
-    * @return     True if desired value different, False otherwise.
-    */
-   virtual bool IsDesiredValueDifferent() const = 0;
 };
 
 /**
@@ -70,21 +71,9 @@ public:
 
 protected:
    /**
-    * @brief      Initializes the value in the setting. Usually to some default.
-    */
-   virtual void Init() = 0;
-
-   /**
     * @brief      Called after the state value changes.
     */
    virtual void OnChangeAction() = 0;
-
-   /**
-    * @brief      The state override determines what the desired value is. This method is called to
-    * set the state to whatever that desired value is. This override should check if the desired
-    * value is different from the current value. If it is, set the value and call OnChangeAction.
-    */
-   virtual void SetToDesiredValue() = 0;
 };
 
 class ReadState : public virtual IReadState
@@ -116,29 +105,24 @@ public:
    }
 
 protected:
-   /**
-    * @brief      Initializes the value in the setting. Usually to some default.
-    */
-   virtual void Init() override
+   void SignalValueChange()
    {
-      SetToDefault();
+      OnChangeAction();
+      // Now call our generic child action.
+
+      Action();
    }
 
    /**
-    * @brief      Checks if the desired value differs from the current value. If
-    * so, mutate the state, and call the on change action.
+    * @brief      Override to set specific behavior for this setting after
+    * the value has been changed and all registrants have been notified.
     */
-   virtual void SetToDesiredValue() override
+   virtual void Action()
    {
-      if (IsDesiredValueDifferent())
-      {
-         ApplyDesiredValue();
-
-         // This cannot fail, so continue on.
-         OnChangeAction();
-      }
+      // Nothing to do by default.
    }
 
+private:
    /**
     * @brief      Called after the state value changes.
     */
@@ -148,34 +132,14 @@ protected:
 
       // Push events to listeners.
       this->mOnChanged.Dispatch(stateChangedEventData);
-
-      // Now call our generic child action.
-      Action(stateChangedEventData);
-   }
-
-   /**
-    * @brief      Override logic to copy the desired value into the current value.
-    */
-   virtual void ApplyDesiredValue() = 0;
-
-   /**
-    * @brief      Override to set specific behavior for this setting after
-    * the value has been changed and all registrants have been notified.
-    */
-   virtual void Action(const tStateChangedEventData& eventData)
-   {
-      // Nothing to do by default.
    }
 };
 
-template <typename T>
-concept ScalarStateValue = std::copyable<T> && std::equality_comparable<T>;
-
-#pragma region Scalar state
-
-template <ScalarStateValue T> class IScalarState : public virtual ReadState
+template <ScalarStateValue T> class IScalarState : public virtual IReadState
 {
 public:
+   using value_type = T;
+
    /**
     * @return     The queried scalar value.
     */
@@ -216,8 +180,8 @@ public:
     */
    void Set(const T& newValue)
    {
-      mDesiredValue = newValue;
-      SetToDesiredValue();
+      mValue = newValue;
+      SignalValueChange();
    }
 
    /**
@@ -236,157 +200,383 @@ public:
       return this->mValue == mDefaultValue;
    }
 
-protected:
-   /**
-    * @brief      Simply set the value to the current desired value.
-    */
-   virtual void ApplyDesiredValue() override
-   {
-      this->mValue = mDesiredValue;
-   }
-
-   /**
-    * @return     True if desired value different, False otherwise.
-    */
-   virtual bool IsDesiredValueDifferent() const override
-   {
-      return this->mValue != mDesiredValue;
-   }
-
 private:
    /**
     * The current desired value.
     */
-   T mDesiredValue;
    T mDefaultValue;
    T mValue;
 };
 
-#pragma endregion
-
-#pragma region Vector state
-
-template <ScalarStateValue T, size_t TSize> class IVectorState : public virtual ReadState
+/**
+ * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
+ */
+template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
 {
 public:
-   /**
-    * @brief      Returns the value at a given index.
-    *
-    * @param[in]  index  The index
-    *
-    * @return     The value.
-    */
-   virtual T GetValue(size_t index) const = 0;
+   // Accessors
+   using value_type = T;
 
    /**
-    * @brief       Returns the value at a given index.
-    * @param       index
-    * @return      the value at the given index
+    * @return      Accesses the value at the given index and returns by ref.
     */
-   virtual T operator[](size_t index) const = 0;
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T operator()(TIdx... indices)
+   {
+      return GetValues()[ToFlatIndex(indices...)];
+   }
+
+   /**
+    * @return      Accesses the value at the given index and returns by ref.
+    */
+   T operator[](size_t flatIndex)
+   {
+      return GetValues()[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   T GetValue(TIdx... indices)
+   {
+      size_t flatIndex = ToFlatIndex(indices...);
+      assert(flatIndex < FlatSize);
+      return (*this)[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index.
+    */
+   T GetValue(size_t flatIndex)
+   {
+      assert(flatIndex < FlatSize);
+      return (*this)[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack by reference
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   const T& GetRef(TIdx... indices)
+   {
+      size_t flatIndex = ToFlatIndex(indices...);
+      assert(flatIndex < FlatSize);
+      return GetValues()[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index by reference
+    */
+   const T& GetRef(size_t flatIndex)
+   {
+      assert(flatIndex < FlatSize);
+      return GetValues()[flatIndex];
+   }
+
+   // ForEach
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   void ForEach(TFunc&& f) const
+   {
+      MatrixForEach<T, TDims...>::template Impl<WalkerNone>(GetValues(), std::forward<TFunc>(f));
+   }
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   void ForEach(TFunc&& f) const
+   {
+      MatrixForEach<T, TDims...>::template Impl<WalkerFlat>(GetValues(), std::forward<TFunc>(f));
+   }
+
+   template <typename TFunc> void ForEach(TFunc&& f) const
+   {
+      MatrixForEach<T, TDims...>::template Impl<WalkerInds>(GetValues(), std::forward<TFunc>(f));
+   }
+
+   // CountIf
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   size_t CountIf(TFunc&& f) const
+   {
+      return MatrixCountIf<T, TDims...>::template Impl<WalkerNone>(
+         GetValues(), std::forward<TFunc>(f));
+   }
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   size_t CountIf(TFunc&& f) const
+   {
+      return MatrixCountIf<T, TDims...>::template Impl<WalkerFlat>(
+         GetValues(), std::forward<TFunc>(f));
+   }
+
+   template <typename TFunc> size_t CountIf(TFunc&& f) const
+   {
+      return MatrixCountIf<T, TDims...>::template Impl<WalkerInds>(
+         GetValues(), std::forward<TFunc>(f));
+   }
+
+   // All
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   bool All(TFunc&& predicate) const
+   {
+      return MatrixAllQuery<T, TDims...>::template Impl<WalkerNone>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   bool All(TFunc&& predicate) const
+   {
+      return MatrixAllQuery<T, TDims...>::template Impl<WalkerFlat>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   template <typename TFunc> bool All(TFunc&& predicate) const
+   {
+      return MatrixAllQuery<T, TDims...>::template Impl<WalkerInds>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   // Any
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 0>
+   bool Any(TFunc&& predicate) const
+   {
+      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerNone>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   template <typename TFunc>
+      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
+   bool Any(TFunc&& predicate) const
+   {
+      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerFlat>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   template <typename TFunc> bool Any(TFunc&& predicate) const
+   {
+      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerInds>(
+         GetValues(), std::forward<TFunc>(predicate));
+   }
+
+   // Fold
+
+   template <typename TFoldResult = T, typename TFunc>
+      requires MatrixFoldClient<TFoldResult, T, TFunc, 0>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
+   {
+      MatrixFoldQuery<T, TDims...>::template Impl<WalkerNone>(
+         initialValue, GetValues(), std::forward<TFunc>(func));
+   }
+
+   template <typename TFoldResult = T, typename TFunc>
+      requires MatrixFoldClient<TFoldResult, T, TFunc, 1, size_t>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
+   {
+      MatrixFoldQuery<T, TDims...>::template Impl<WalkerFlat>(
+         initialValue, GetValues(), std::forward<TFunc>(func));
+   }
+
+   template <typename TFoldResult = T, typename TFunc>
+   void Fold(TFoldResult& initialValue, TFunc&& func) const
+   {
+      MatrixFoldQuery<T, TDims...>::template Impl<WalkerInds>(
+         initialValue, GetValues(), std::forward<TFunc>(func));
+   }
+
+   // FindIf
+
+   template <typename TFunc, typename... TIdx>
+      requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
+   bool FindIf(TFunc&& predicate, TIdx&... indices) const
+   {
+      return MatrixFindIfQuery<T, TDims...>::Impl(
+         GetValues(), std::forward<TFunc>(predicate), indices...);
+   }
 
    /**
     * @brief      Returns a readonly view of the data.
-    *
     * @return     The readonly data view as a span.
     */
-   virtual const std::span<const T> GetValue() const = 0;
+   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const = 0;
 
    /**
-    * @brief       Performs an action per element readonly
-    * @param       func  
-    */
-   virtual void ForEach(std::function<void(const T& value, size_t index)> func) const = 0;
-
-   /**
-    * @return      true if all values match the predicate
-    */
-   virtual bool All(std::function<bool(const T& value)> predicate) const = 0;
-
-   /**
-    * @return      true if any of the values in the set match the predicate
-    */
-   virtual bool Any(std::function<bool(const T& value)> predicate) const = 0;
-
-   /**
-    * @brief      Returns the number of elements in this vector state.
-    * This cannot be modified at runtime.
+    * @brief      Returns a raw pointer to the underlying flat matrix values.
     *
-    * @return     The size.
+    * @return     A raw pointer to the underlying data. It is considered unsafe to cast away const
+    * and modify the values.
     */
-   size_t GetSize() const
+   const std::span<const T> GetValuesUnsized() const
    {
-      return TSize;
+      return GetValues();
    }
+
+   /**
+    * @return     The total number of dimensions available for this matrix.
+    */
+   int GetNumDims() const
+   {
+      return sizeof...(TDims);
+   }
+
+   /**
+    * @return     Returns the size of the given dimension. 0 being the first specified dimension.
+    */
+   size_t GetDimSize(size_t dimIndex) const
+   {
+      if (dimIndex < GetNumDims())
+      {
+         return mDimSizes[dimIndex];
+      }
+
+      return 0;
+   }
+
+   /**
+    * @brief      Finds the size of the given dimension as a compile time constant. 0 being the
+    * first specified dimension
+    *
+    * @return     The dim size at the given dimension
+    */
+   template <size_t TDimIndex> size_t GetDimSize() const
+   {
+      return GetDimSizeImpl<TDimIndex, TDims...>();
+   }
+
+   /**
+    * @return     Computes the flat index equivalent of the passed index pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   size_t ToFlatIndex(TIdx... indices) const
+   {
+      return ComputeFlatIndex<TDims...>(indices...);
+   }
+
+   /**
+    * @return     The total number of elements in this matrix.
+    */
+   size_t GetFlatSize() const
+   {
+      return FlatSize;
+   }
+
+private:
+   // Store the flat size of the array as a const in the base class.
+   constexpr static size_t FlatSize = TotalVecSize<TDims...>();
+
+   // Statically for this type stores the dimensions for runtime use.
+   static constexpr const int mDimSizes[sizeof...(TDims)]{TDims...};
+
+   // Available walkers.
+   using WalkerNone = MatrixWalkerNoIndices<T, TDims...>;
+   using WalkerFlat = MatrixWalkerFlatIndex<T, TDims...>;
+   using WalkerInds = MatrixWalkerMatrixIndices<T, TDims...>;
 };
 
-template <ScalarStateValue T, size_t TSize>
-class VectorState : public virtual ReadWriteState, public virtual IVectorState<T, TSize>
+template <ScalarStateValue T, size_t... TDims>
+class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
 {
 public:
    /**
-    * @brief      Standard constructor
+    * @brief      Standard constructor.
     *
-    * @param[in]  defaultScalar  The default value for every element in the vector state.
+    * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   VectorState(const T& defaultScalar)
-      : mDefaultScalar(defaultScalar)
+   MatrixState(const T& defaultScalar) : mDefaultScalar(defaultScalar), mValue(nullptr)
    {
-      // Need to have at least one element.
-      static_assert(TSize > 0, "Invalid vector size");
-
+      mValue = std::make_unique<std::array<T, FlatSize>>();
       SetToDefault();
    }
 
-   virtual T GetValue(size_t index) const override 
+   /**
+    * @return      The value at the given matrix index.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T& operator()(TIdx... indices)
    {
-      assert(index < TSize);
-      return this->mValue[index];
+      return mValue->at(this->ToFlatIndex(indices...));
    }
 
    /**
-    * @brief       Returns the value at the given index, no bounds checking.
-    * @param       index  
-    * @return      
+    * @return     True if at default, False otherwise.
     */
-   virtual T operator[](size_t index) const override
+   virtual bool IsAtDefault() const override
    {
-      return mValue[index];
-   }
-
-   virtual const std::span<const T> GetValue() const override
-   {
-      return this->mValue;
-   }
-
-   /**
-    * @brief      Sets a single value and updates the state.
-    *
-    * @param[in]  value  The value
-    * @param[in]  index  The index
-    */
-   virtual void SetValue(const T& value, size_t index)
-   {
-      assert(index < TSize);
-
-      mDesiredValue[index] = value;
-      SetToDesiredValue();
-   }
-
-   /**
-    * @brief       Sets all the values in the vector to the given value.
-    * @param       value  
-    */
-   virtual VectorState& SetAll(const T& value)
-   {
-      SetValues([value](std::span<T> data, size_t count) 
-      {
-         for (size_t i = 0; i < count; i++)
+      return this->All(
+         [this](const T& value)
          {
-            data[i] = value;
-         }
-      });
+            return value == mDefaultScalar;
+         });
+   }
 
+   /**
+    * @brief      Sets the current value to the default scalar for every element.
+    */
+   virtual void SetToDefault() override
+   {
+      SetValues(mDefaultScalar);
+   }
+
+   // Map
+
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 0>
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   {
+      MatrixMap<T, TDims...>::template Impl<WalkerNone>(*mValue, std::forward<TFunc>(mapper));
+      SignalValueChange();
+      return *this;
+   }
+
+   template <typename TFunc>
+      requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
+   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   {
+      MatrixMap<T, TDims...>::template Impl<WalkerFlat>(*mValue, std::forward<TFunc>(mapper));
+      SignalValueChange();
+      return *this;
+   }
+
+   template <typename TFunc> MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   {
+      MatrixMap<T, TDims...>::template Impl<WalkerInds>(*mValue, std::forward<TFunc>(mapper));
+      SignalValueChange();
+      return *this;
+   }
+
+   /**
+    * @brief      Sets the value at a given flat index.
+    *
+    * @param[in]  value      The value
+    * @param[in]  flatIndex  The flat index
+    */
+   virtual void SetValue(const T& value, size_t flatIndex)
+   {
+      assert(flatIndex < FlatSize);
+      mValue->at(flatIndex) = value;
+      SignalValueChange();
+   }
+
+   /**
+    * @brief      Sets a value at a given matrix pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   MatrixState<T, TDims...>& SetValue(T value, TIdx... indices)
+   {
+      this->SetValue(value, this->ToFlatIndex(indices...));
       return *this;
    }
 
@@ -394,140 +584,89 @@ public:
     * @brief      Sets many values and only updates the state and calls the changed callback once.
     *
     * @param[in]  setCallback  The set callback
+    *
+    * @return     Self
     */
-   virtual VectorState& SetValues(std::function<void(std::span<T> data, size_t count)> setCallback)
+   template <typename TFunc>
+      requires MatrixBulkAction<T, TFunc>
+   MatrixState<T, TDims...>& SetValues(TFunc&& setter)
    {
-      setCallback(mDesiredValue, TSize);
-      SetToDesiredValue();
+      setter(*mValue, FlatSize);
+      SignalValueChange();
       return *this;
    }
 
    /**
-    * @return     Compares if the current value is equal to default.
+    * @brief      Returns a readonly view of the data.
+    * @return     The readonly data view as a span.
     */
-   virtual bool IsAtDefault() const override
+   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const override
    {
-      for (size_t i = 0; i < TSize; i++)
-      {
-         if (mValue[i] != mDefaultScalar)
-         {
-            return false;
-         }
-      }
-
-      return true;
+      return *mValue;
    }
 
    /**
-    * @brief       Sets every value to the default scalar
+    * @brief      Sets every value in the matrix to the value
+    *
+    * @param[in]  value  The value
+    *
+    * @return     Self
     */
-   virtual void SetToDefault() override
+   MatrixState<T, TDims...>& SetValues(const T& value)
    {
-      SetAll(mDefaultScalar);
-   }
-
-   virtual bool All(std::function<bool(const T& value)> predicate) const override
-   {
-      for (int i = 0; i < TSize; i++)
-      {
-         if (!predicate(mValue[i]))
+      Map(
+         [&value](T& currentValue)
          {
-            return false;
-         }
-      }
+            currentValue = value;
+         });
 
-      return true;
-   }
-
-
-   virtual bool Any(std::function<bool(const T& value)> predicate) const override
-   {
-      for (int i = 0; i < TSize; i++)
-      {
-         if (predicate(mValue[i]))
-         {
-            return true;
-         }
-      }
-
-      return false;
-   }
-
-   /**
-    * @brief       Transforms each value to a new value from the mapper func
-    * @param       mapper  
-    */
-   virtual VectorState& Map(std::function<T (const T& value)> mapper)
-   {
-      for (int i = 0; i < TSize; i++)
-      {
-         mDesiredValue[i] = mapper(mValue[i]);
-      }
-
-      SetToDesiredValue();
       return *this;
-   }
-
-   /**
-    * @brief       Performs a given action for each element in the vector
-    * @param       The action to perform for each element.
-    */
-   virtual void ForEach(std::function<void(const T& value, size_t index)> action) const override
-   {
-      for (int i = 0; i < TSize; i++)
-      {
-         action(mValue[i], i);
-      }
-   }
-
-   /**
-    * @brief       Generates list values for each element based on the tabulation func.
-    * @param       func  
-    */
-   virtual VectorState& Tabulate(std::function<T(const T& oldValue, size_t index)> func)
-   {
-      for (size_t i = 0; i < TSize; i++)
-      {
-         mDesiredValue[i] = func(mValue[i], i);
-      }
-
-      SetToDesiredValue();
-      return *this;
-   }
-
-protected:
-   /**
-    * @brief      Simply set the value to the current desired value.
-    */
-   virtual void ApplyDesiredValue() override
-   {
-      for (size_t i = 0; i < TSize; i++)
-      {
-         mValue[i] = mDesiredValue[i];
-      }
-   }
-
-   /**
-    * @return     True if desired value different, False otherwise.
-    */
-   virtual bool IsDesiredValueDifferent() const override
-   {
-      for (size_t i = 0; i < TSize; i++)
-      {
-         if (mValue[i] != mDesiredValue[i])
-         {
-            return true;
-         }
-      }
-
-      return false;
    }
 
 private:
-   T mValue[TSize];
-   T mDesiredValue[TSize];
+   constexpr static size_t FlatSize = TotalVecSize<TDims...>();
+   std::unique_ptr<std::array<T, FlatSize>> mValue;
    T mDefaultScalar;
+
+   // Available walkers.
+   using WalkerNone = MatrixWalkerNoIndices<T, TDims...>;
+   using WalkerFlat = MatrixWalkerFlatIndex<T, TDims...>;
+   using WalkerInds = MatrixWalkerMatrixIndices<T, TDims...>;
 };
 
-#pragma endregion
+// Vectors
+
+/**
+ * @brief      A specialization of a matrix where it's giving one dimension of N size.
+ * IVectorState<T, TSize> only provides the readable interface.
+ *
+ * @tparam     T      A scalar value representing a single element in the vector
+ * @tparam     TSize  The length of the vector.
+ */
+template <ScalarStateValue T, size_t TSize>
+class IVectorState : public virtual IMatrixState<T, TSize>
+{
+public:
+};
+
+/**
+ * @brief      A specialization of a matrix where it's giving one dimension of N size.
+ * VectorState<T, TSize> provides both the read and write interfaces.
+ *
+ * @tparam     T      A scalar value representing a single element in the vector
+ * @tparam     TSize  The length of the vector.
+ */
+template <ScalarStateValue T, size_t TSize>
+class VectorState : public virtual MatrixState<T, TSize>, public virtual IVectorState<T, TSize>
+{
+public:
+   /**
+    * @brief      Standard constructor
+    *
+    * @param[in]  defaultScalar  The default value for every element in the vector state.
+    */
+   VectorState(const T& defaultScalar) : MatrixState<T, TSize>(defaultScalar)
+   {
+   }
+};
 }   // namespace kc
