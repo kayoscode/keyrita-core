@@ -1,13 +1,12 @@
 #include "keyrita_core/MatrixQuery.h"
 #include "keyrita_core/MatrixUtils.h"
 #include "keyrita_core/State.h"
+#include "keyrita_core/MatrixState.h"
+#include "keyrita_core/ScalarState.h"
 
 #include <cmath>
 #include <cstddef>
-#include <functional>
 #include <gtest/gtest.h>
-#include <numeric>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
