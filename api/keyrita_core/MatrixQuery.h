@@ -1,8 +1,9 @@
 #pragma once
 
+#include "keyrita_core/State.h"
+
 #include <concepts>
 #include <cstddef>
-#include <functional>
 #include <span>
 #include <tuple>
 #include <type_traits>
@@ -10,9 +11,6 @@
 
 namespace kc
 {
-template <typename T>
-concept ScalarStateValue = std::copyable<T> && std::equality_comparable<T>;
-
 /**
  * @return      Returns the number of dimensions given by a templated list of dims
  */
