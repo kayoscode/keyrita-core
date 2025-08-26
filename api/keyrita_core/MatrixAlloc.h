@@ -5,7 +5,6 @@
 #include <array>
 #include <concepts>
 #include <span>
-#include <type_traits>
 
 namespace kc
 {

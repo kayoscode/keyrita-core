@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <span>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 
 namespace kc

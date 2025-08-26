@@ -1,12 +1,8 @@
-#include "keyrita_core/MatrixAlloc.h"
 #include "keyrita_core/MatrixState.h"
 #include "keyrita_core/MatrixUtils.h"
-#include <Timer.h>
-#include <iostream>
-
-using namespace kc;
+#include "keyrita_core/ScalarState.h"
 
 int main()
 {
-   StaticVectorState<int, 100> t(10);
+   kc::ScalarState<int> a(10);
 }
