@@ -16,6 +16,7 @@ set(SRC
 
 set(HEADERS
         # Public api
+        api/keyrita_core/MatrixAlloc.h
         api/keyrita_core/MatrixQuery.h
         api/keyrita_core/MatrixUtils.h
         api/keyrita_core/MatrixState.h

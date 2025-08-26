@@ -1,8 +1,8 @@
 #include "keyrita_core/MatrixQuery.h"
-#include "keyrita_core/MatrixUtils.h"
-#include "keyrita_core/State.h"
 #include "keyrita_core/MatrixState.h"
+#include "keyrita_core/MatrixUtils.h"
 #include "keyrita_core/ScalarState.h"
+#include "keyrita_core/State.h"
 
 #include <cmath>
 #include <cstddef>
@@ -10,10 +10,13 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <winscard.h>
 
 using namespace kc;
 
+/**
+ * @param[in]  n     The triangle number to compute.
+ * @return     The Nth triangle number
+ */
 constexpr int Trianglate(int n)
 {
    return n * (n + 1) / 2;
@@ -136,7 +139,7 @@ TEST(StateTests, EnumStateTests)
 
 TEST(StateTests, GeneralVectorStateTests)
 {
-   VectorState<int, 30> vec(1);
+   StaticVectorState<int, 30> vec(1);
    IVectorState<int, 30>& roVec = vec;
 
    // Check if default works.
@@ -234,10 +237,10 @@ TEST(StateTests, GeneralVectorStateTests)
 
 typedef size_t func_test_t;
 
-template <size_t... TDims> class TestMatrixQueries
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixQueries
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    constexpr static void Test()
    {
@@ -316,10 +319,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixMap
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixMap
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    constexpr static void Test()
    {
@@ -411,10 +414,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixForEach
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixForEach
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    static void Test()
    {
@@ -518,10 +521,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixCountIf
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixCountIf
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    static void Test()
    {
@@ -589,10 +592,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixAllQuery
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixAllQuery
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    static void Test()
    {
@@ -686,10 +689,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixAnyQuery
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixAnyQuery
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    static void Test()
    {
@@ -784,10 +787,10 @@ private:
    }
 };
 
-template <size_t... TDims> class TestMatrixFold
+template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixFold
 {
 public:
-   using mat_t = MatrixState<func_test_t, TDims...>;
+   using mat_t = TMatrix<func_test_t, TDims...>;
 
    static void Test()
    {
@@ -872,7 +875,7 @@ public:
       size_t x, y, z;
       bool found = false;
 
-      VectorState<func_test_t, 10> vec(0);
+      StaticVectorState<func_test_t, 10> vec(0);
       MatrixUtils::FillSequence(vec);
 
       // Find the first and last elements.
@@ -895,7 +898,7 @@ public:
       ASSERT_TRUE(found);
 
       // Test on a matrix and test each combination of parameters.
-      MatrixState<func_test_t, 10, 10, 10> matrix(0);
+      HeapMatrixState<func_test_t, 10, 10, 10> matrix(0);
       MatrixUtils::FillSequence(matrix);
 
       // Find without taking in any indices.
@@ -967,29 +970,66 @@ public:
    }
 };
 
-TEST(StateTests, TestMatrices)
+TEST(StateTests, TestMatrixQueries)
 {
-   TestMatrixQueries<10>::Test();
-   TestMatrixQueries<5, 1, 2>::Test();
+   TestMatrixQueries<HeapMatrixState, 10>::Test();
+   TestMatrixQueries<HeapMatrixState, 1, 2>::Test();
+   TestMatrixQueries<StaticVectorState, 10>::Test();
+   TestMatrixQueries<StaticMatrixState, 1, 2>::Test();
+}
 
-   TestMatrixForEach<10>::Test();
-   TestMatrixForEach<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixForEach)
+{
+   TestMatrixForEach<HeapVectorState, 10>::Test();
+   TestMatrixForEach<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixForEach<StaticVectorState, 10>::Test();
+   TestMatrixForEach<StaticMatrixState, 5, 1, 2>::Test();
+}
 
-   TestMatrixCountIf<10>::Test();
-   TestMatrixCountIf<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixCountIf)
+{
+   TestMatrixCountIf<HeapVectorState, 10>::Test();
+   TestMatrixCountIf<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixCountIf<StaticVectorState, 10>::Test();
+   TestMatrixCountIf<StaticMatrixState, 5, 1, 2>::Test();
+}
 
-   TestMatrixAllQuery<10>::Test();
-   TestMatrixAllQuery<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixAllQuery)
+{
+   TestMatrixAllQuery<HeapVectorState, 10>::Test();
+   TestMatrixAllQuery<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixAllQuery<StaticVectorState, 10>::Test();
+   TestMatrixAllQuery<StaticMatrixState, 5, 1, 2>::Test();
+}
 
-   TestMatrixAnyQuery<10>::Test();
-   TestMatrixAnyQuery<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixAnyQuery)
+{
+   TestMatrixAnyQuery<HeapVectorState, 10>::Test();
+   TestMatrixAnyQuery<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixAnyQuery<StaticVectorState, 10>::Test();
+   TestMatrixAnyQuery<StaticMatrixState, 5, 1, 2>::Test();
+}
 
-   TestMatrixMap<10>::Test();
-   TestMatrixMap<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixMap)
+{
+   TestMatrixMap<HeapVectorState, 10>::Test();
+   TestMatrixMap<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixMap<StaticVectorState, 10>::Test();
+   TestMatrixMap<StaticMatrixState, 5, 1, 2>::Test();
+}
 
-   TestMatrixFold<10>::Test();
-   TestMatrixFold<5, 1, 2>::Test();
+TEST(StateTests, TestMatrixFold)
+{
 
+   TestMatrixFold<HeapVectorState, 10>::Test();
+   TestMatrixFold<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixFold<StaticVectorState, 10>::Test();
+   TestMatrixFold<StaticMatrixState, 5, 1, 2>::Test();
+
+}
+
+TEST(StateTests, TestMatrixFindIf)
+{
    TestMatrixFindIf::Test();
 }
 
