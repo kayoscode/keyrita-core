@@ -13,7 +13,7 @@ int main()
 
    Timer t;
    matrix.Map(
-      [&matrix](mat_t& value, size_t idx)
+      [](mat_t& value, size_t idx)
       {
          value = idx;
       });
