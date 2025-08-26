@@ -5,6 +5,7 @@
 #include <iostream>
 
 using namespace kc;
+using mat_t = size_t;
 
 int main()
 {

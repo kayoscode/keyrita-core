@@ -140,7 +140,7 @@ template <typename T, size_t... TDims> class MatrixWalkerNoIndices
 public:
    template <typename TFunc>
       requires MatrixImmutableWalkClient<T, TFunc, 0>
-   static void WalkReadOnly(
+   static constexpr void WalkReadOnly(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       Walk<const T>(matrixValues, std::forward<TFunc>(action));
@@ -148,14 +148,14 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 0>
-   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   static constexpr void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       Walk<T>(matrixValues, std::forward<TFunc>(action));
    }
 
 private:
    template <typename TSpanType, typename TFunc>
-   constexpr static void Walk(
+   static constexpr void Walk(
       std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       for (TSpanType& value : matrixValues)
@@ -188,7 +188,7 @@ template <typename T, size_t... TDims> class MatrixWalkerFlatIndex
 public:
    template <typename TFunc>
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   static void WalkReadOnly(
+   static constexpr void WalkReadOnly(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       Walk<const T>(matrixValues, std::forward<TFunc>(action));
@@ -196,14 +196,14 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
-   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
+   static constexpr void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       Walk<T>(matrixValues, std::forward<TFunc>(action));
    }
 
 private:
    template <typename TSpanType, typename TFunc>
-   constexpr static void Walk(
+   static constexpr void Walk(
       std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& action)
    {
       for (size_t i = 0; i < TotalVecSize<TDims...>(); i++)
@@ -234,14 +234,14 @@ private:
 template <typename T, size_t... TDims> struct MatrixWalkerMatrixIndices
 {
    template <typename TFunc>
-   static void WalkReadOnly(std::span<const T, TotalVecSize<TDims...>()> values, TFunc&& func)
+   static constexpr void WalkReadOnly(std::span<const T, TotalVecSize<TDims...>()> values, TFunc&& func)
    {
       std::array<size_t, sizeof...(TDims)> dims{};
       WalkImpl<const T, TFunc, 0, TDims...>(values, std::forward<TFunc>(func), dims);
    }
 
    template <typename TFunc>
-   static void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> values, TFunc&& func)
+   static constexpr void WalkReadWrite(std::span<T, TotalVecSize<TDims...>()> values, TFunc&& func)
    {
       std::array<size_t, sizeof...(TDims)> dims{};
       WalkImpl<T, TFunc, 0, TDims...>(values, std::forward<TFunc>(func), dims);
@@ -261,7 +261,7 @@ private:
     */
    template <typename TSpanType, typename TFunc, size_t TCurrentDimIdx, size_t TFirstDim,
       size_t... TRemainingDims>
-   static bool WalkImpl(std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& func,
+   static constexpr bool WalkImpl(std::span<TSpanType, TotalVecSize<TDims...>()> matrixValues, TFunc&& func,
       std::array<size_t, sizeof...(TDims)>& indices, size_t flatIdx = 0)
    {
       // Get the stride
@@ -336,15 +336,22 @@ template <ScalarStateValue T, size_t... TDims> class MatrixForEach
 {
 public:
    template <typename TWalker, typename TFunc>
-   static constexpr void Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   static constexpr void Run(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       TWalker::WalkReadOnly(matrixValues,
          [f = std::forward<TFunc>(f)](const T& value, auto&&... indices)
          {
-            // Here we discard any potential return value from the function to prevent any kind of
-            // cancellation.
-            f(value, indices...);
+            Impl(f, value, indices...);
          });
+   }
+
+private:
+   template <typename TFunc>
+   static constexpr void Impl(TFunc&& f, const T& value, auto&&... indices)
+   {
+      // Here we discard any potential return value from the function to prevent any kind of
+      // cancellation.
+      f(value, indices...);
    }
 };
 
@@ -360,7 +367,7 @@ template <ScalarStateValue T, size_t... TDims> class MatrixAllQuery
 {
 public:
    template <typename TWalker, typename TFunc>
-   static bool Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   static constexpr bool Run(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result = true;
 
@@ -368,15 +375,23 @@ public:
       TWalker::WalkReadOnly(matrixValues,
          [&result, predicate = std::forward<TFunc>(predicate)](const T& value, auto&&... indices)
          {
-            if (!predicate(value, indices...))
-            {
-               result = false;
-            }
-
-            return result;
+            return Impl(predicate, result, value, indices...);
          });
 
       return result;
+   }
+
+private:
+   template <typename TFunc>
+   static constexpr bool Impl(TFunc&& predicate, bool& result, const T& value, auto&&... indices)
+   {
+      if (!predicate(value, indices...))
+      {
+         result = false;
+         return false;
+      }
+
+      return true;
    }
 };
 
@@ -392,7 +407,7 @@ template <ScalarStateValue T, size_t... TDims> class MatrixAnyQuery
 {
 public:
    template <typename TWalker, typename TFunc>
-   static bool Impl(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   static constexpr bool Run(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result = false;
 
@@ -400,16 +415,23 @@ public:
       TWalker::WalkReadOnly(matrixValues,
          [&result, predicate = std::forward<TFunc>(predicate)](const T& value, auto&&... indices)
          {
-            if (predicate(value, indices...))
-            {
-               result = true;
-               return false;
-            }
-
-            return true;
+            return Impl(predicate, result, value, indices...);
          });
 
       return result;
+   }
+
+private:
+   template <typename TFunc>
+   static constexpr bool Impl(TFunc&& predicate, bool& result, const T& value, auto&&... indices)
+   {
+      if (predicate(value, indices...))
+      {
+         result = true;
+         return false;
+      }
+
+      return true;
    }
 };
 
@@ -424,14 +446,21 @@ template <ScalarStateValue T, size_t... TDims> class MatrixFoldQuery
 {
 public:
    template <typename TWalker, typename TFoldResult, typename TFunc>
-   static void Impl(
-      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& func)
+   static constexpr void Run(
+      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       TWalker::WalkReadOnly(matrixValues,
-         [&acc, func = std::forward<TFunc>(func)](const T& value, auto&&... indices)
+         [&acc, f = std::forward<TFunc>(f)](const T& value, auto&&... indices)
          {
-            func(acc, value, indices...);
+            Impl(f, acc, value, indices...);
          });
+   }
+
+private:
+   template <typename TFoldResult, typename TFunc>
+   static constexpr void Impl(TFunc&& f, TFoldResult& acc, const T& value, auto&&... indices)
+   {
+      f(acc, value, indices...);
    }
 };
 
@@ -447,20 +476,27 @@ template <ScalarStateValue T, size_t... TDims> class MatrixCountIf
 {
 public:
    template <typename TWalker, typename TFunc>
-   static constexpr size_t Impl(
+   static constexpr size_t Run(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       size_t acc = 0;
-      MatrixFoldQuery<T, TDims...>::template Impl<TWalker, size_t>(acc, matrixValues,
+      MatrixFoldQuery<T, TDims...>::template Run<TWalker, size_t>(acc, matrixValues,
          [predicate = std::forward<TFunc>(predicate)](size_t& acc, const T& value, auto... indices)
          {
-            if (predicate(value, indices...))
-            {
-               acc++;
-            }
+            Impl(predicate, acc, value, indices...);
          });
 
       return acc;
+   }
+
+private:
+   template <typename TFunc>
+   static constexpr void Impl(TFunc&& predicate, size_t& acc, const T& value, auto&&... indices)
+   {
+      if (predicate(value, indices...))
+      {
+         acc++;
+      }
    }
 };
 
@@ -477,7 +513,7 @@ template <ScalarStateValue T, size_t... TDims> class MatrixFindIfQuery
 public:
    template <typename TFunc, typename... TIdx>
       requires(sizeof...(TIdx) > 0)
-   static constexpr bool Impl(
+   static constexpr bool Run(
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate, TIdx&... outIdx)
    {
       bool found = false;
@@ -514,6 +550,7 @@ public:
       return found;
    }
 
+private:
    static constexpr void PackSingleIndex(size_t& outIdx, size_t index)
    {
       outIdx = index;
@@ -564,14 +601,21 @@ template <ScalarStateValue T, size_t... TDims> class MatrixMap
 {
 public:
    template <typename TWalker, typename TFunc>
-   static constexpr void Impl(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       TWalker::WalkReadWrite(matrixValues,
          [f = std::forward<TFunc>(f)](T& value, auto&&... indices)
          {
             // Discard any cancellation return, the value is set inside the function
-            f(value, indices...);
+            Impl(f, value, indices...);
          });
+   }
+
+private:
+   template <typename TFunc>
+   static constexpr void Impl(TFunc&& f, T& value, auto&&... indices)
+   {
+      f(value, indices...);
    }
 };
 }   // namespace kc

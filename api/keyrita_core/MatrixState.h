@@ -7,6 +7,42 @@
 namespace kc
 {
 /**
+ * @brief      Class representing a read only view of a matrix state object
+ *
+ * @tparam     T      The type stored in the matrix.
+ * @tparam     TDims  The original dimensions of the matrix.
+ */
+template <ScalarStateValue T, size_t... TDims> class IMatrixView
+{
+public:
+   using value_type = T;
+
+   /**
+    * @brief      Standard constructor
+    * @param[in]  rawData  A raw pointer to readonly memory over which this view will operate.
+    */
+   IMatrixView(const std::span<const T, TotalVecSize<TDims...>()> rawData)
+      : mRawMatrix(rawData)
+   {
+   }
+
+private:
+   std::span<const T, TotalVecSize<TDims...>()> mRawMatrix;
+   std::array<std::tuple<size_t, size_t>, sizeof...(TDims)> mSlice;
+};
+
+/**
+ * @brief      Class representing a read/write view of a matrix state object
+ *
+ * @tparam     T      The type stored in the matrix.
+ * @tparam     TDims  The original dimensions of the matrix.
+ */
+template <ScalarStateValue T, size_t... TDims> class MatrixView : public IMatrixView<T, TDims...>
+{
+public:
+};
+
+/**
  * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
  */
 template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
@@ -81,19 +117,19 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 0>
    void ForEach(TFunc&& f) const
    {
-      MatrixForEach<T, TDims...>::template Impl<WalkerNone>(GetValues(), std::forward<TFunc>(f));
+      MatrixForEach<T, TDims...>::template Run<WalkerNone>(GetValues(), std::forward<TFunc>(f));
    }
 
    template <typename TFunc>
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
    void ForEach(TFunc&& f) const
    {
-      MatrixForEach<T, TDims...>::template Impl<WalkerFlat>(GetValues(), std::forward<TFunc>(f));
+      MatrixForEach<T, TDims...>::template Run<WalkerFlat>(GetValues(), std::forward<TFunc>(f));
    }
 
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      MatrixForEach<T, TDims...>::template Impl<WalkerInds>(GetValues(), std::forward<TFunc>(f));
+      MatrixForEach<T, TDims...>::template Run<WalkerInds>(GetValues(), std::forward<TFunc>(f));
    }
 
    // CountIf
@@ -102,7 +138,7 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 0>
    size_t CountIf(TFunc&& f) const
    {
-      return MatrixCountIf<T, TDims...>::template Impl<WalkerNone>(
+      return MatrixCountIf<T, TDims...>::template Run<WalkerNone>(
          GetValues(), std::forward<TFunc>(f));
    }
 
@@ -110,13 +146,13 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
    size_t CountIf(TFunc&& f) const
    {
-      return MatrixCountIf<T, TDims...>::template Impl<WalkerFlat>(
+      return MatrixCountIf<T, TDims...>::template Run<WalkerFlat>(
          GetValues(), std::forward<TFunc>(f));
    }
 
    template <typename TFunc> size_t CountIf(TFunc&& f) const
    {
-      return MatrixCountIf<T, TDims...>::template Impl<WalkerInds>(
+      return MatrixCountIf<T, TDims...>::template Run<WalkerInds>(
          GetValues(), std::forward<TFunc>(f));
    }
 
@@ -126,7 +162,7 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 0>
    bool All(TFunc&& predicate) const
    {
-      return MatrixAllQuery<T, TDims...>::template Impl<WalkerNone>(
+      return MatrixAllQuery<T, TDims...>::template Run<WalkerNone>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
@@ -134,13 +170,13 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
    bool All(TFunc&& predicate) const
    {
-      return MatrixAllQuery<T, TDims...>::template Impl<WalkerFlat>(
+      return MatrixAllQuery<T, TDims...>::template Run<WalkerFlat>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
    template <typename TFunc> bool All(TFunc&& predicate) const
    {
-      return MatrixAllQuery<T, TDims...>::template Impl<WalkerInds>(
+      return MatrixAllQuery<T, TDims...>::template Run<WalkerInds>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
@@ -149,7 +185,7 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 0>
    bool Any(TFunc&& predicate) const
    {
-      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerNone>(
+      return MatrixAnyQuery<T, TDims...>::template Run<WalkerNone>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
@@ -157,13 +193,13 @@ public:
       requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
    bool Any(TFunc&& predicate) const
    {
-      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerFlat>(
+      return MatrixAnyQuery<T, TDims...>::template Run<WalkerFlat>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
    template <typename TFunc> bool Any(TFunc&& predicate) const
    {
-      return MatrixAnyQuery<T, TDims...>::template Impl<WalkerInds>(
+      return MatrixAnyQuery<T, TDims...>::template Run<WalkerInds>(
          GetValues(), std::forward<TFunc>(predicate));
    }
 
@@ -173,7 +209,7 @@ public:
       requires MatrixFoldClient<TFoldResult, T, TFunc, 0>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFoldQuery<T, TDims...>::template Impl<WalkerNone>(
+      MatrixFoldQuery<T, TDims...>::template Run<WalkerNone>(
          initialValue, GetValues(), std::forward<TFunc>(func));
    }
 
@@ -181,14 +217,14 @@ public:
       requires MatrixFoldClient<TFoldResult, T, TFunc, 1, size_t>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFoldQuery<T, TDims...>::template Impl<WalkerFlat>(
+      MatrixFoldQuery<T, TDims...>::template Run<WalkerFlat>(
          initialValue, GetValues(), std::forward<TFunc>(func));
    }
 
    template <typename TFoldResult = T, typename TFunc>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFoldQuery<T, TDims...>::template Impl<WalkerInds>(
+      MatrixFoldQuery<T, TDims...>::template Run<WalkerInds>(
          initialValue, GetValues(), std::forward<TFunc>(func));
    }
 
@@ -198,7 +234,7 @@ public:
       requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
    bool FindIf(TFunc&& predicate, TIdx&... indices) const
    {
-      return MatrixFindIfQuery<T, TDims...>::Impl(
+      return MatrixFindIfQuery<T, TDims...>::Run(
          GetValues(), std::forward<TFunc>(predicate), indices...);
    }
 
@@ -341,7 +377,7 @@ public:
       requires MatrixMutableWalkClient<T, TFunc, 0>
    MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerNone>(mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Run<WalkerNone>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
@@ -350,14 +386,14 @@ public:
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
    MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerFlat>(mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Run<WalkerFlat>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
 
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerInds>(mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Run<WalkerInds>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
@@ -465,8 +501,7 @@ public:
  */
 template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t TSize>
    requires MatrixAlloc<TAlloc, T, TSize>
-class VectorState : public MatrixState<TAlloc, T, TSize>,
-                    public virtual IVectorState<T, TSize>
+class VectorState : public MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
 {
 public:
    /**
@@ -516,8 +551,7 @@ template <ScalarStateValue T, size_t TSize>
 class HeapVectorState : public VectorState<MatrixHeapAlloc, T, TSize>
 {
 public:
-   HeapVectorState(const T& defaultScalar)
-      : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
+   HeapVectorState(const T& defaultScalar) : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
    {
    }
 };
