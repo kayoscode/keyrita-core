@@ -996,18 +996,18 @@ TEST(StateTests, TestMatrixCountIf)
 
 TEST(StateTests, TestMatrixAllQuery)
 {
-   // TestMatrixAllQuery<HeapVectorState, 10>::Test();
-   // TestMatrixAllQuery<HeapMatrixState, 5, 1, 2>::Test();
-   // TestMatrixAllQuery<StaticVectorState, 10>::Test();
-   // TestMatrixAllQuery<StaticMatrixState, 5, 1, 2>::Test();
+   TestMatrixAllQuery<HeapVectorState, 10>::Test();
+   TestMatrixAllQuery<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixAllQuery<StaticVectorState, 10>::Test();
+   TestMatrixAllQuery<StaticMatrixState, 5, 1, 2>::Test();
 }
 
 TEST(StateTests, TestMatrixAnyQuery)
 {
    TestMatrixAnyQuery<HeapVectorState, 10>::Test();
-   // TestMatrixAnyQuery<HeapMatrixState, 5, 1, 2>::Test();
-   // TestMatrixAnyQuery<StaticVectorState, 10>::Test();
-   // TestMatrixAnyQuery<StaticMatrixState, 5, 1, 2>::Test();
+   TestMatrixAnyQuery<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixAnyQuery<StaticVectorState, 10>::Test();
+   TestMatrixAnyQuery<StaticMatrixState, 5, 1, 2>::Test();
 }
 
 TEST(StateTests, TestMatrixMap)

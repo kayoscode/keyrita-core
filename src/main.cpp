@@ -8,6 +8,5 @@ using namespace kc;
 
 int main()
 {
-   HeapVectorState<int, 10> vec(10);
-   std::cout << MatrixUtils::Sum(vec) << "\n";
+   StaticVectorState<int, 100> t(10);
 }

@@ -292,17 +292,19 @@ private:
  * @tparam     TDims  A size_t list of dimensions
  */
 template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t... TDims>
+   requires MatrixAlloc<TAlloc, T, TotalVecSize<TDims...>()>
 class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
 {
 public:
+   using allocator_type = TAlloc<T, TotalVecSize<TDims...>()>;
+
    /**
     * @brief      Standard constructor.
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   MatrixState(const T& defaultScalar) : mDefaultScalar(defaultScalar), mValue(nullptr)
+   MatrixState(const T& defaultScalar) : mDefaultScalar(defaultScalar), mValue(mAllocator.GetVec())
    {
-      mValue = std::make_unique<std::array<T, FlatSize>>();
       SetToDefault();
    }
 
@@ -313,7 +315,7 @@ public:
       requires MatrixIndices<sizeof...(TDims), TIdx...>
    T& operator()(TIdx... indices)
    {
-      return mValue->at(this->ToFlatIndex(indices...));
+      return mValue[this->ToFlatIndex(indices...)];
    }
 
    /**
@@ -342,7 +344,7 @@ public:
       requires MatrixMutableWalkClient<T, TFunc, 0>
    MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerNone>(*mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Impl<WalkerNone>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
@@ -351,14 +353,14 @@ public:
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
    MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerFlat>(*mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Impl<WalkerFlat>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
 
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Impl<WalkerInds>(*mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::template Impl<WalkerInds>(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
@@ -372,7 +374,7 @@ public:
    virtual void SetValue(const T& value, size_t flatIndex)
    {
       assert(flatIndex < FlatSize);
-      mValue->at(flatIndex) = value;
+      mValue[flatIndex] = value;
       SignalValueChange();
    }
 
@@ -398,7 +400,7 @@ public:
       requires MatrixBulkAction<T, TFunc>
    MatrixState& SetValues(TFunc&& setter)
    {
-      setter(*mValue, FlatSize);
+      setter(mValue, FlatSize);
       SignalValueChange();
       return *this;
    }
@@ -409,7 +411,7 @@ public:
     */
    virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const override
    {
-      return *mValue;
+      return mValue;
    }
 
    /**
@@ -432,7 +434,8 @@ public:
 
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
-   std::unique_ptr<std::array<T, FlatSize>> mValue;
+   TAlloc<T, FlatSize> mAllocator;
+   std::span<T, FlatSize> mValue;
    T mDefaultScalar;
 
    // Available walkers.
@@ -464,6 +467,7 @@ public:
  * @tparam     TSize  The length of the vector.
  */
 template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t TSize>
+   requires MatrixAlloc<TAlloc, T, TSize>
 class VectorState : public MatrixState<TAlloc, T, TSize>,
                     public virtual IVectorState<T, TSize>
 {

@@ -5,6 +5,7 @@
 #include <array>
 #include <concepts>
 #include <span>
+#include <type_traits>
 
 namespace kc
 {
@@ -17,10 +18,11 @@ namespace kc
  * @tparam     TFlatSize  The flat size of the vector returned by the allocator class.
  */
 template <template <typename T, size_t TFlatSize> class TAlloc, typename T, size_t TFlatSize>
-concept MatrixAlloc = ScalarStateValue<T> && requires(TAlloc<T, TFlatSize>& alloc) {
-   { alloc.GetVec() } -> std::same_as<std::span<T, TFlatSize>>;
-   { alloc.GetVec() } -> std::convertible_to<std::span<const T, TFlatSize>>;
-};
+concept MatrixAlloc = ScalarStateValue<T> && std::is_default_constructible_v<T> &&
+                      requires(TAlloc<T, TFlatSize>& alloc) {
+                         { alloc.GetVec() } -> std::same_as<std::span<T, TFlatSize>>;
+                         { alloc.GetVec() } -> std::convertible_to<std::span<const T, TFlatSize>>;
+                      };
 
 /**
  * @brief      Allocates a buffer of static memory.
