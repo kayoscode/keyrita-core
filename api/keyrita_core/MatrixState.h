@@ -511,14 +511,6 @@ public:
    }
 };
 
-// template <ScalarStateValue T, size_t TSize>
-// class HeapVectorState : public virtual VectorState<MatrixHeapAlloc, T, TSize>
-// {
-// public:
-//    HeapVectorState(const T& defaultScalar) : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
-//    {
-//    }
-// };
 template <ScalarStateValue T, size_t TSize>
 class HeapVectorState : public VectorState<MatrixHeapAlloc, T, TSize>
 {

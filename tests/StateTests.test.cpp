@@ -10,7 +10,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <winscard.h>
 
 using namespace kc;
 
@@ -1005,7 +1004,7 @@ TEST(StateTests, TestMatrixAllQuery)
 
 TEST(StateTests, TestMatrixAnyQuery)
 {
-   // TestMatrixAnyQuery<HeapVectorState, 10>::Test();
+   TestMatrixAnyQuery<HeapVectorState, 10>::Test();
    // TestMatrixAnyQuery<HeapMatrixState, 5, 1, 2>::Test();
    // TestMatrixAnyQuery<StaticVectorState, 10>::Test();
    // TestMatrixAnyQuery<StaticMatrixState, 5, 1, 2>::Test();

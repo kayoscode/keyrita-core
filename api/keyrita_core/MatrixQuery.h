@@ -160,7 +160,7 @@ private:
    {
       for (TSpanType& value : matrixValues)
       {
-         if constexpr (std::is_convertible_v<std::invoke_result<TFunc, TSpanType&>, bool>)
+         if constexpr (std::is_convertible_v<std::invoke_result_t<TFunc, TSpanType&>, bool>)
          {
             // Break out if the action allows it.
             if (!action(value))
