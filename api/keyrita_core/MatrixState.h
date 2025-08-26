@@ -1,10 +1,11 @@
 #pragma once
 
+#include "keyrita_core/MatrixAlloc.h"
 #include "keyrita_core/MatrixQuery.h"
 #include "keyrita_core/State.h"
 
-#include <memory>
 #include <array>
+#include <memory>
 
 namespace kc
 {
@@ -290,7 +291,7 @@ private:
  * @tparam     T      value_type for the matrix
  * @tparam     TDims  A size_t list of dimensions
  */
-template <ScalarStateValue T, size_t... TDims>
+template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t... TDims>
 class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
 {
 public:
@@ -339,7 +340,7 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 0>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   MatrixState& Map(TFunc&& mapper)
    {
       MatrixMap<T, TDims...>::template Impl<WalkerNone>(*mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
@@ -348,14 +349,14 @@ public:
 
    template <typename TFunc>
       requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
-   MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   MatrixState& Map(TFunc&& mapper)
    {
       MatrixMap<T, TDims...>::template Impl<WalkerFlat>(*mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
 
-   template <typename TFunc> MatrixState<T, TDims...>& Map(TFunc&& mapper)
+   template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
       MatrixMap<T, TDims...>::template Impl<WalkerInds>(*mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
@@ -380,7 +381,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   MatrixState<T, TDims...>& SetValue(T value, TIdx... indices)
+   MatrixState& SetValue(T value, TIdx... indices)
    {
       this->SetValue(value, this->ToFlatIndex(indices...));
       return *this;
@@ -395,7 +396,7 @@ public:
     */
    template <typename TFunc>
       requires MatrixBulkAction<T, TFunc>
-   MatrixState<T, TDims...>& SetValues(TFunc&& setter)
+   MatrixState& SetValues(TFunc&& setter)
    {
       setter(*mValue, FlatSize);
       SignalValueChange();
@@ -418,7 +419,7 @@ public:
     *
     * @return     Self
     */
-   MatrixState<T, TDims...>& SetValues(const T& value)
+   MatrixState& SetValues(const T& value)
    {
       Map(
          [&value](T& currentValue)
@@ -462,8 +463,9 @@ public:
  * @tparam     T      A scalar value representing a single element in the vector
  * @tparam     TSize  The length of the vector.
  */
-template <ScalarStateValue T, size_t TSize>
-class VectorState : public virtual MatrixState<T, TSize>, public virtual IVectorState<T, TSize>
+template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t TSize>
+class VectorState : public MatrixState<TAlloc, T, TSize>,
+                    public virtual IVectorState<T, TSize>
 {
 public:
    /**
@@ -471,8 +473,59 @@ public:
     *
     * @param[in]  defaultScalar  The default value for every element in the vector state.
     */
-   VectorState(const T& defaultScalar) : MatrixState<T, TSize>(defaultScalar)
+   VectorState(const T& defaultScalar) : MatrixState<TAlloc, T, TSize>(defaultScalar)
    {
    }
 };
-}
+
+/**
+ * Helper definitions.
+ */
+template <ScalarStateValue T, size_t... TDims>
+class StaticMatrixState : public MatrixState<MatrixStaticAlloc, T, TDims...>
+{
+public:
+   StaticMatrixState(const T& defaultScalar)
+      : MatrixState<MatrixStaticAlloc, T, TDims...>(defaultScalar)
+   {
+   }
+};
+
+template <ScalarStateValue T, size_t... TDims>
+class HeapMatrixState : public MatrixState<MatrixHeapAlloc, T, TDims...>
+{
+public:
+   HeapMatrixState(const T& defaultScalar)
+      : MatrixState<MatrixHeapAlloc, T, TDims...>(defaultScalar)
+   {
+   }
+};
+
+template <ScalarStateValue T, size_t TSize>
+class StaticVectorState : public VectorState<MatrixStaticAlloc, T, TSize>
+{
+public:
+   StaticVectorState(const T& defaultScalar)
+      : VectorState<MatrixStaticAlloc, T, TSize>(defaultScalar)
+   {
+   }
+};
+
+// template <ScalarStateValue T, size_t TSize>
+// class HeapVectorState : public virtual VectorState<MatrixHeapAlloc, T, TSize>
+// {
+// public:
+//    HeapVectorState(const T& defaultScalar) : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
+//    {
+//    }
+// };
+template <ScalarStateValue T, size_t TSize>
+class HeapVectorState : public VectorState<MatrixHeapAlloc, T, TSize>
+{
+public:
+   HeapVectorState(const T& defaultScalar)
+      : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
+   {
+   }
+};
+}   // namespace kc
