@@ -8,5 +8,4 @@ using namespace kc;
 
 int main()
 {
-   StaticVectorState<int, 100> t(10);
 }
