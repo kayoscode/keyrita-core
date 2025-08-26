@@ -324,12 +324,12 @@ private:
  * @tparam     T      value_type for the matrix
  * @tparam     TDims  A size_t list of dimensions
  */
-template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t... TDims>
+template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t... TDims>
    requires MatrixAlloc<TAlloc, T, TotalVecSize<TDims...>()>
 class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
 {
 public:
-   using allocator_type = TAlloc<T, TotalVecSize<TDims...>()>;
+   using allocator_type = TAlloc<T, TDims...>;
 
    /**
     * @brief      Standard constructor.
@@ -467,7 +467,7 @@ public:
 
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
-   TAlloc<T, FlatSize> mAllocator;
+   TAlloc<T, TDims...> mAllocator;
    std::span<T, FlatSize> mValue;
    T mDefaultScalar;
 
@@ -499,7 +499,7 @@ public:
  * @tparam     T      A scalar value representing a single element in the vector
  * @tparam     TSize  The length of the vector.
  */
-template <template <typename, size_t> class TAlloc, ScalarStateValue T, size_t TSize>
+template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t TSize>
    requires MatrixAlloc<TAlloc, T, TSize>
 class VectorState : public MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
 {
