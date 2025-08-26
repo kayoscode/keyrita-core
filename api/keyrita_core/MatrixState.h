@@ -4,9 +4,6 @@
 #include "keyrita_core/MatrixQuery.h"
 #include "keyrita_core/State.h"
 
-#include <array>
-#include <memory>
-
 namespace kc
 {
 /**
