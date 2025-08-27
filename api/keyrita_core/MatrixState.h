@@ -119,26 +119,9 @@ public:
 
    // CountIf
 
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 0>
-   size_t CountIf(TFunc&& f) const
-   {
-      return MatrixCountIf<T, TDims...>::template Run<WalkerNone>(
-         GetValues(), std::forward<TFunc>(f));
-   }
-
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   size_t CountIf(TFunc&& f) const
-   {
-      return MatrixCountIf<T, TDims...>::template Run<WalkerFlat>(
-         GetValues(), std::forward<TFunc>(f));
-   }
-
    template <typename TFunc> size_t CountIf(TFunc&& f) const
    {
-      return MatrixCountIf<T, TDims...>::template Run<WalkerInds>(
-         GetValues(), std::forward<TFunc>(f));
+      return MatrixCountIf<T, TDims...>::Run(GetValues(), std::forward<TFunc>(f));
    }
 
    // All
@@ -149,51 +132,18 @@ public:
    }
 
    // Any
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 0>
-   bool Any(TFunc&& predicate) const
-   {
-      return MatrixAnyQuery<T, TDims...>::template Run<WalkerNone>(
-         GetValues(), std::forward<TFunc>(predicate));
-   }
-
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   bool Any(TFunc&& predicate) const
-   {
-      return MatrixAnyQuery<T, TDims...>::template Run<WalkerFlat>(
-         GetValues(), std::forward<TFunc>(predicate));
-   }
 
    template <typename TFunc> bool Any(TFunc&& predicate) const
    {
-      return MatrixAnyQuery<T, TDims...>::template Run<WalkerInds>(
-         GetValues(), std::forward<TFunc>(predicate));
+      return MatrixAnyQuery<T, TDims...>::Run(GetValues(), std::forward<TFunc>(predicate));
    }
 
    // Fold
 
    template <typename TFoldResult = T, typename TFunc>
-      requires MatrixFoldClient<TFoldResult, T, TFunc, 0>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFoldQuery<T, TDims...>::template Run<WalkerNone>(
-         initialValue, GetValues(), std::forward<TFunc>(func));
-   }
-
-   template <typename TFoldResult = T, typename TFunc>
-      requires MatrixFoldClient<TFoldResult, T, TFunc, 1, size_t>
-   void Fold(TFoldResult& initialValue, TFunc&& func) const
-   {
-      MatrixFoldQuery<T, TDims...>::template Run<WalkerFlat>(
-         initialValue, GetValues(), std::forward<TFunc>(func));
-   }
-
-   template <typename TFoldResult = T, typename TFunc>
-   void Fold(TFoldResult& initialValue, TFunc&& func) const
-   {
-      MatrixFoldQuery<T, TDims...>::template Run<WalkerInds>(
-         initialValue, GetValues(), std::forward<TFunc>(func));
+      MatrixFoldQuery<T, TDims...>::Run(initialValue, GetValues(), std::forward<TFunc>(func));
    }
 
    // FindIf

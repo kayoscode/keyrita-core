@@ -13,17 +13,22 @@ int main()
 
    Timer t;
    matrix.Map(
-      [&matrix](mat_t& value, size_t idx)
+      [](mat_t& value, size_t idx)
       {
          value = idx;
       });
 
-   size_t sum = 0;
+   size_t sum, sum2;
    matrix.Fold(sum, [](size_t& currentSum, mat_t value)
    {
       currentSum += value;
    });
+   matrix.Fold(sum2, [](size_t& currentSum, mat_t value)
+   {
+      currentSum += value;
+   });
 
-   std::cout << sum << "\n";
    std::cout << t.Milliseconds() << "\n";   
+   std::cout << sum << "\n";
+   std::cout << sum2 << "\n";
 }
