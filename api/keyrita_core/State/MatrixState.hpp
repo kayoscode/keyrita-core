@@ -1,8 +1,8 @@
 #pragma once
 
-#include "keyrita_core/MatrixAlloc.hpp"
-#include "keyrita_core/MatrixQuery.hpp"
-#include "keyrita_core/State.hpp"
+#include "keyrita_core/State/MatrixAlloc.hpp"
+#include "keyrita_core/State/MatrixQuery.hpp"
+#include "keyrita_core/State/StateBase.hpp"
 
 namespace kc
 {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <concepts>
 #include <cpp_events/Event.h>
+#include <concepts>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>

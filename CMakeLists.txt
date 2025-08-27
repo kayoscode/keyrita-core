@@ -16,12 +16,13 @@ set(SRC
 
 set(HEADERS
         # Public api
-        api/keyrita_core/MatrixAlloc.hpp
-        api/keyrita_core/MatrixQuery.hpp
-        api/keyrita_core/MatrixUtils.hpp
-        api/keyrita_core/MatrixState.hpp
-        api/keyrita_core/ScalarState.hpp
-        api/keyrita_core/State.hpp
+        api/keyrita_core/State/MatrixAlloc.hpp
+        api/keyrita_core/State/MatrixQuery.hpp
+        api/keyrita_core/State/MatrixUtils.hpp
+        api/keyrita_core/State/MatrixState.hpp
+        api/keyrita_core/State/ScalarState.hpp
+        api/keyrita_core/State/State.hpp
+        api/keyrita_core/State/StateBase.hpp
 
         # Private utils
         private_include/DebugBreak.hpp
