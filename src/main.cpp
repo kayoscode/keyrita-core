@@ -7,7 +7,7 @@ using mat_t = int;
 
 int main()
 {
-   HeapMatrixState<mat_t, 50000, 50000> matrix(10);
+   HeapMatrixState<mat_t, 5000, 5000> matrix(10);
 
    Timer t;
    matrix.Map(
