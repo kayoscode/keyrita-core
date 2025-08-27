@@ -16,16 +16,16 @@ set(SRC
 
 set(HEADERS
         # Public api
-        api/keyrita_core/MatrixAlloc.h
-        api/keyrita_core/MatrixQuery.h
-        api/keyrita_core/MatrixUtils.h
-        api/keyrita_core/MatrixState.h
-        api/keyrita_core/ScalarState.h
-        api/keyrita_core/State.h
+        api/keyrita_core/MatrixAlloc.hpp
+        api/keyrita_core/MatrixQuery.hpp
+        api/keyrita_core/MatrixUtils.hpp
+        api/keyrita_core/MatrixState.hpp
+        api/keyrita_core/ScalarState.hpp
+        api/keyrita_core/State.hpp
 
         # Private utils
-        private_include/DebugBreak.h
-        private_include/Timer.h
+        private_include/DebugBreak.hpp
+        private_include/Timer.hpp
 )
 
 # External libs

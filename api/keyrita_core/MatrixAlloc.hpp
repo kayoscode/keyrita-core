@@ -1,6 +1,6 @@
 #pragma once
 
-#include "keyrita_core/MatrixQuery.h"
+#include "keyrita_core/MatrixQuery.hpp"
 
 #include <array>
 #include <concepts>

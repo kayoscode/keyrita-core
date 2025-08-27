@@ -1,6 +1,6 @@
 #pragma once
 
-#include "keyrita_core/State.h"
+#include "keyrita_core/State.hpp"
 
 #include <concepts>
 #include <cstddef>

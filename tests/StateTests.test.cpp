@@ -1,8 +1,8 @@
-#include "keyrita_core/MatrixQuery.h"
-#include "keyrita_core/MatrixState.h"
-#include "keyrita_core/MatrixUtils.h"
-#include "keyrita_core/ScalarState.h"
-#include "keyrita_core/State.h"
+#include "keyrita_core/MatrixQuery.hpp"
+#include "keyrita_core/MatrixState.hpp"
+#include "keyrita_core/MatrixUtils.hpp"
+#include "keyrita_core/ScalarState.hpp"
+#include "keyrita_core/State.hpp"
 
 #include <cmath>
 #include <cstddef>

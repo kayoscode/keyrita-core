@@ -1,5 +1,5 @@
-#include "keyrita_core/MatrixState.h"
-#include <Timer.h>
+#include "keyrita_core/MatrixState.hpp"
+#include <Timer.hpp>
 #include <iostream>
 
 using namespace kc;
