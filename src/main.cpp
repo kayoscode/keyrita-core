@@ -5,7 +5,7 @@
 #include <iostream>
 
 using namespace kc;
-using mat_t = int;
+using mat_t = size_t;
 
 int main()
 {
@@ -18,17 +18,12 @@ int main()
          value = idx;
       });
 
-   size_t sum, sum2;
+   size_t sum = 0;
    matrix.Fold(sum, [](size_t& currentSum, mat_t value)
-   {
-      currentSum += value;
-   });
-   matrix.Fold(sum2, [](size_t& currentSum, mat_t value)
    {
       currentSum += value;
    });
 
    std::cout << t.Milliseconds() << "\n";   
    std::cout << sum << "\n";
-   std::cout << sum2 << "\n";
 }

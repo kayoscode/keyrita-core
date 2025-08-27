@@ -291,27 +291,9 @@ public:
 
    // Map
 
-   template <typename TFunc>
-      requires MatrixMutableWalkClient<T, TFunc, 0>
-   MatrixState& Map(TFunc&& mapper)
-   {
-      MatrixMap<T, TDims...>::template Run<WalkerNone>(mValue, std::forward<TFunc>(mapper));
-      SignalValueChange();
-      return *this;
-   }
-
-   template <typename TFunc>
-      requires MatrixMutableWalkClient<T, TFunc, 1, size_t>
-   MatrixState& Map(TFunc&& mapper)
-   {
-      MatrixMap<T, TDims...>::template Run<WalkerFlat>(mValue, std::forward<TFunc>(mapper));
-      SignalValueChange();
-      return *this;
-   }
-
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
-      MatrixMap<T, TDims...>::template Run<WalkerInds>(mValue, std::forward<TFunc>(mapper));
+      MatrixMap<T, TDims...>::Run(mValue, std::forward<TFunc>(mapper));
       SignalValueChange();
       return *this;
    }
