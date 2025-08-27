@@ -229,11 +229,6 @@ private:
 
    // Statically for this type stores the dimensions for runtime use.
    static constexpr const int mDimSizes[sizeof...(TDims)]{TDims...};
-
-   // Available walkers.
-   using WalkerNone = MatrixWalkerNoIndices<T, TDims...>;
-   using WalkerFlat = MatrixWalkerFlatIndex<T, TDims...>;
-   using WalkerInds = MatrixWalkerMatrixIndices<T, TDims...>;
 };
 
 /**
@@ -370,11 +365,6 @@ private:
    TAlloc<T, TDims...> mAllocator;
    std::span<T, FlatSize> mValue;
    T mDefaultScalar;
-
-   // Available walkers.
-   using WalkerNone = MatrixWalkerNoIndices<T, TDims...>;
-   using WalkerFlat = MatrixWalkerFlatIndex<T, TDims...>;
-   using WalkerInds = MatrixWalkerMatrixIndices<T, TDims...>;
 };
 
 // Vectors
