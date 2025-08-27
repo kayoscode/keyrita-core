@@ -21,8 +21,7 @@ public:
     * @brief      Standard constructor
     * @param[in]  rawData  A raw pointer to readonly memory over which this view will operate.
     */
-   IMatrixView(const std::span<const T, TotalVecSize<TDims...>()> rawData)
-      : mRawMatrix(rawData)
+   IMatrixView(const std::span<const T, TotalVecSize<TDims...>()> rawData) : mRawMatrix(rawData)
    {
    }
 
@@ -113,23 +112,9 @@ public:
 
    // ForEach
 
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 0>
-   void ForEach(TFunc&& f) const
-   {
-      MatrixForEach<T, TDims...>::template Run<WalkerNone>(GetValues(), std::forward<TFunc>(f));
-   }
-
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   void ForEach(TFunc&& f) const
-   {
-      MatrixForEach<T, TDims...>::template Run<WalkerFlat>(GetValues(), std::forward<TFunc>(f));
-   }
-
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      MatrixForEach<T, TDims...>::template Run<WalkerInds>(GetValues(), std::forward<TFunc>(f));
+      MatrixForEach<T, TDims...>::Run(GetValues(), std::forward<TFunc>(f));
    }
 
    // CountIf
@@ -158,26 +143,9 @@ public:
 
    // All
 
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 0>
-   bool All(TFunc&& predicate) const
-   {
-      return MatrixAllQuery<T, TDims...>::template Run<WalkerNone>(
-         GetValues(), std::forward<TFunc>(predicate));
-   }
-
-   template <typename TFunc>
-      requires MatrixImmutableWalkClient<T, TFunc, 1, size_t>
-   bool All(TFunc&& predicate) const
-   {
-      return MatrixAllQuery<T, TDims...>::template Run<WalkerFlat>(
-         GetValues(), std::forward<TFunc>(predicate));
-   }
-
    template <typename TFunc> bool All(TFunc&& predicate) const
    {
-      return MatrixAllQuery<T, TDims...>::template Run<WalkerInds>(
-         GetValues(), std::forward<TFunc>(predicate));
+      return MatrixAllQuery<T, TDims...>::Run(GetValues(), std::forward<TFunc>(predicate));
    }
 
    // Any
