@@ -110,44 +110,92 @@ public:
       return GetValues()[flatIndex];
    }
 
-   // ForEach
-
+   /**
+    * @brief      Iterates through each element in the matrix and calls your callback.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& value)
+    * 2. [](const T& value, size_t flatIndex)
+    * 3. [](const T& value, size_t... NIndices)
+    */
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
       MatrixForEach<T, TDims...>::Run(GetValues(), std::forward<TFunc>(f));
    }
 
-   // CountIf
-
+   /**
+    * @brief      Counts the number of elements in the matrix that match the given predicate.
+    *
+    * @param      f      Predicate called per element. There are 3 valid formats:
+    * 1. [](const T& value) -> bool
+    * 2. [](const T& value, size_t flatIndex) -> bool
+    * 3. [](const T& value, size_t... NIndices) -> bool
+    *
+    * @return     The number of elements that matched the predicate.
+    */
    template <typename TFunc> size_t CountIf(TFunc&& f) const
    {
       return MatrixCountIf<T, TDims...>::Run(GetValues(), std::forward<TFunc>(f));
    }
 
-   // All
-
+   /**
+    * @brief      Returns true if all the elements in the matrix match the predicate
+    *
+    * @param      f      Predicate called per element. There are 3 valid formats:
+    * 1. [](const T& value) -> bool
+    * 2. [](const T& value, size_t flatIndex) -> bool
+    * 3. [](const T& value, size_t... NIndices) -> bool
+    *
+    * @return     True if all elements match.
+    */
    template <typename TFunc> bool All(TFunc&& predicate) const
    {
       return MatrixAllQuery<T, TDims...>::Run(GetValues(), std::forward<TFunc>(predicate));
    }
 
-   // Any
-
+   /**
+    * @brief      Returns true if any of the elements in the matrix match the predicate
+    *
+    * @param      f      Predicate called per element. There are 3 valid formats:
+    * 1. [](const T& value) -> bool
+    * 2. [](const T& value, size_t flatIndex) -> bool
+    * 3. [](const T& value, size_t... NIndices) -> bool
+    *
+    * @return     True if any elements match.
+    */
    template <typename TFunc> bool Any(TFunc&& predicate) const
    {
       return MatrixAnyQuery<T, TDims...>::Run(GetValues(), std::forward<TFunc>(predicate));
    }
 
-   // Fold
-
+   /**
+    * @brief      Iterates over every element in the matrix accumulating a result based on some
+    *func. It's notable that the TFoldResult does not have to match the type T.
+    *:
+    * @param      f      Accumulator called per element. There are 3 valid formats:
+    * 1. [](TFoldResult& acc, const T& value) 
+    * 2. [](TFoldResult& acc, const T& value, size_t flatIndex) 
+    * 3. [](TFoldResult& acc, const T& value, size_t... NIndices) 
+    */
    template <typename TFoldResult = T, typename TFunc>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
       MatrixFoldQuery<T, TDims...>::Run(initialValue, GetValues(), std::forward<TFunc>(func));
    }
 
-   // FindIf
-
+   /**
+    * @brief      Returns a set of requested indices for the first element in the matrix that 
+    * was found which matches the predicate.
+    *
+    * @param      f      Predicate called per element. There are 3 valid formats:
+    * 1. [](const T& value) -> bool
+    * 2. [](const T& value, size_t flatIndex) -> bool
+    * 3. [](const T& value, size_t... NIndices) -> bool
+    * 
+    * You may provide 0, 1, or N {where N = sizeof(dims)} for the format which to receive the found index.
+    * 
+    * @return     True if any items were found, false otherwise.
+    */
    template <typename TFunc, typename... TIdx>
       requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
    bool FindIf(TFunc&& predicate, TIdx&... indices) const
@@ -284,8 +332,17 @@ public:
       SetValues(mDefaultScalar);
    }
 
-   // Map
-
+   /**
+    * @brief      Iterates through each element providing a reference to allow you to assign the value.
+    * Since no new data is created, map must map an element of type T to another element of type T.
+    * If you must create new data, use fold to produce the new result, or allocate the data first,
+    * then use foreach to fill in the results.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& value)
+    * 2. [](const T& value, size_t flatIndex)
+    * 3. [](const T& value, size_t... NIndices)
+    */
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
       MatrixMap<T, TDims...>::Run(mValue, std::forward<TFunc>(mapper));
