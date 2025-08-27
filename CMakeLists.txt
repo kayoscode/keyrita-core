@@ -21,11 +21,11 @@ set(HEADERS
         api/keyrita_core/State/MatrixUtils.hpp
         api/keyrita_core/State/MatrixState.hpp
         api/keyrita_core/State/ScalarState.hpp
-        api/keyrita_core/State/State.hpp
         api/keyrita_core/State/StateBase.hpp
 
+        api/keyrita_core/State.hpp
+
         # Private utils
-        private_include/DebugBreak.hpp
         private_include/Timer.hpp
 )
 
