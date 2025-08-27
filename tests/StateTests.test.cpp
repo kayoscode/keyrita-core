@@ -237,7 +237,7 @@ TEST(StateTests, GeneralVectorStateTests)
 
 typedef size_t func_test_t;
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixQueries
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixQueries
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -319,7 +319,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixMap
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixMap
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -414,7 +414,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixForEach
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixForEach
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -521,7 +521,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixCountIf
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixCountIf
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -592,7 +592,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixAllQuery
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixAllQuery
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -689,7 +689,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixAnyQuery
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixAnyQuery
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -787,7 +787,7 @@ private:
    }
 };
 
-template <template <typename, size_t> typename TMatrix, size_t... TDims> class TestMatrixFold
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixFold
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
@@ -972,7 +972,7 @@ public:
 
 TEST(StateTests, TestMatrixQueries)
 {
-   TestMatrixQueries<HeapMatrixState, 10>::Test();
+   TestMatrixQueries<HeapVectorState, 10>::Test();
    TestMatrixQueries<HeapMatrixState, 1, 2>::Test();
    TestMatrixQueries<StaticVectorState, 10>::Test();
    TestMatrixQueries<StaticMatrixState, 1, 2>::Test();
