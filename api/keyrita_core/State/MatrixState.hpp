@@ -353,7 +353,7 @@ public:
 
    template <typename... TFuncs> MatrixState& Ops(TFuncs&&... funcs)
    {
-      MatrixOps<T, TDims...>::Run(mValue, funcs...);
+      MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
       return *this;
    }
 

@@ -202,7 +202,7 @@ public:
     * Pass along to the client and do whatever you need with the result.
     */
    template <typename T, typename... TIdx>
-   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -240,7 +240,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       if (CallClient(value, flatIndex, indices...))
       {
@@ -289,7 +289,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       if (!CallClient(value, flatIndex, indices...))
       {
@@ -339,7 +339,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       if (CallClient(value, flatIndex, indices...))
       {
@@ -389,7 +389,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -435,7 +435,7 @@ public:
     * Pass along to the client and do whatever you need with the result.
     */
    template <typename T, typename... TIdx>
-   constexpr void Impl(T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(T& value, size_t flatIndex, TIdx... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -522,27 +522,14 @@ concept ValidMatrixOp = ScalarStateValue<T> && requires() {
 template <ScalarStateValue T, size_t... TDims> class MatrixOps
 {
 public:
-   template <typename... TFuncs>
-   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncs&&... funcs)
+   template <typename... TOps>
+   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOps&&... ops)
    {
-      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, funcs...));
-   }
-
-   template <typename TCurrentFunc, typename... TRemainingFuncs>
-      requires(sizeof...(TRemainingFuncs) > 0)
-   static constexpr auto GetRunner(std::span<T, TotalVecSize<TDims...>()> matrixValues,
-      TCurrentFunc&& currentFunc, TRemainingFuncs&&... remaining)
-   {
-      return [matrixValues, remaining..., f = std::forward<TCurrentFunc>(currentFunc)](
-                size_t flatIdx, auto&&... indices)
-      {
-         // Call ourselves
-         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
-
-         // Since we know there's at least one more, call the next.
-         auto nextCall = GetRunner(matrixValues, remaining...);
-         nextCall(flatIdx, indices...);
-      };
+      MatrixStaticWalker<TDims...>::Walk(
+         [matrixValues, &ops...](size_t flatIdx, auto&&... indices)
+         {
+            ((ops.Impl(matrixValues[flatIdx], flatIdx, indices...), ...));
+         });
    }
 };
 
