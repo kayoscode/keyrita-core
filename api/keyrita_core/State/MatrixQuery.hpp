@@ -138,7 +138,7 @@ concept MatrixFoldClient =
  * @tparam     TTotalSize  The flat size of the matrix
  * @tparam     TDims...    The list of dimensions and sizes known at compile time.
  */
-template <typename T, size_t... TDims> struct MatrixStaticWalker
+template <size_t... TDims> struct MatrixStaticWalker
 {
    /**
     * @brief      Implements the walk operation keeping track of indices for each dimension.
@@ -239,11 +239,12 @@ public:
    template <typename TFunc>
    static constexpr void Run(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
+      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
    }
 
    template <typename TFunc>
-   static constexpr auto GetRunner(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   static constexpr auto GetRunner(
+      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       return [matrixValues, f = std::forward<TFunc>(f)](size_t flatIdx, auto&&... indices)
       {
@@ -296,15 +297,18 @@ public:
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result;
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
+      MatrixStaticWalker<TDims...>::Walk(
+         GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
       return result;
    }
 
    template <typename TFunc>
-   static constexpr auto GetRunner(bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   static constexpr auto GetRunner(
+      bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       result = true;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](size_t flatIdx, auto&&... indices)
+      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
+                size_t flatIdx, auto&&... indices)
       {
          return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
       };
@@ -362,15 +366,18 @@ public:
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       bool result;
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
+      MatrixStaticWalker<TDims...>::Walk(
+         GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
       return result;
    }
 
    template <typename TFunc>
-   static constexpr auto GetRunner(bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   static constexpr auto GetRunner(
+      bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       result = false;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](size_t flatIdx, auto&&... indices)
+      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
+                size_t flatIdx, auto&&... indices)
       {
          return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
       };
@@ -426,11 +433,12 @@ public:
    static constexpr void Run(
       TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(acc, matrixValues, std::forward<TFunc>(f)));
+      MatrixStaticWalker<TDims...>::Walk(GetRunner(acc, matrixValues, std::forward<TFunc>(f)));
    }
 
    template <typename TFoldResult, typename TFunc>
-   static constexpr auto GetRunner(TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   static constexpr auto GetRunner(
+      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
       return [matrixValues, &acc, f = std::forward<TFunc>(f)](size_t flatIdx, auto&&... indices)
       {
@@ -487,16 +495,19 @@ public:
       std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       size_t count = 0;
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(count, matrixValues, std::forward<TFunc>(predicate)));
+      MatrixStaticWalker<TDims...>::Walk(
+         GetRunner(count, matrixValues, std::forward<TFunc>(predicate)));
 
       return count;
    }
 
    template <typename TFunc>
-   static constexpr auto GetRunner(size_t& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
+   static constexpr auto GetRunner(
+      size_t& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
    {
       result = 0;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](size_t flatIdx, auto&&... indices)
+      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
+                size_t flatIdx, auto&&... indices)
       {
          return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
       };
@@ -504,7 +515,8 @@ public:
 
 private:
    template <typename TFunc>
-   static constexpr void Impl(TFunc&& predicate, size_t& count, const T& value, size_t flatIndex, auto&&... indices)
+   static constexpr void Impl(
+      TFunc&& predicate, size_t& count, const T& value, size_t flatIndex, auto&&... indices)
    {
       if (CallClient(std::forward<TFunc>(predicate), value, flatIndex, indices...))
       {
@@ -556,11 +568,12 @@ public:
       // possible, otherwise pass nothing. Compute the flat index if we find the right result and
       // store it in the output indices.
 
-      MatrixStaticWalker<T, TDims...>::Walk(
+      MatrixStaticWalker<TDims...>::Walk(
          [&matrixValues, &found, &predicate, &outIdx...](size_t flatIndex, auto... indices)
          {
             // Query the predicate value.
-            if (CallClientHelper(matrixValues[flatIndex], std::forward<TFunc>(predicate), indices...))
+            if (CallClientHelper(
+                   matrixValues[flatIndex], std::forward<TFunc>(predicate), indices...))
             {
                if constexpr (sizeof...(TIdx) == sizeof...(indices))
                {
@@ -637,7 +650,7 @@ public:
    template <typename TFunc>
    static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
    {
-      MatrixStaticWalker<T, TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
+      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
    }
 
    template <typename TFunc>
@@ -650,11 +663,99 @@ public:
    }
 
 private:
-   template <typename TFunc> static constexpr void Impl(TFunc&& f, T& value, size_t flatIndex, auto&&... indices)
+   template <typename TFunc>
+   static constexpr void Impl(TFunc&& f, T& value, size_t flatIndex, auto&&... indices)
    {
       CallClient(std::forward<TFunc>(f), value, flatIndex, indices...);
    }
 
+   template <typename TFunc, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&>
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
+   {
+      f(value);
+   }
+
+   template <typename TFunc, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
+   {
+      f(value, flatIndex);
+   }
+
+   template <typename TFunc, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&, TIdx...>
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
+   {
+      f(value, indices...);
+   }
+};
+
+/**
+ * @brief      A valid op is defied by whether it has a GetRunner call which can be invoked by
+ * (size_t flatIndex, size_t... indices) where the size of indices matches the number of dimensions.
+ *
+ * @tparam     TOp    The class which executes the given operation
+ * @tparam     T      The typename T executed
+ * @tparam     TDims  The list of dimensions making up the matrix.
+ */
+template <class TOp, typename T, size_t... TDims>
+concept ValidMatrixOp = ScalarStateValue<T> && requires() {
+   { TOp::GetRunner() };
+};
+
+/**
+ * @brief      Passes if the series of ops in the given order can be executed on a matrix.
+ *
+ * Rules:
+ * 1. Each op's runner is executed in the order given. results can only be returned from the last op
+ * in the list.
+ * 2. Even if your op returns a bool, the operation will not be short circuited if called here.
+ *
+ * Unenforced rule:
+ * The actions are executed one after another in a single loop, All results must be computed
+ * based on the assumption that none of the other values in the matrix have been mutated yet.
+ */
+template <ScalarStateValue T, size_t... TDims> class MatrixOps
+{
+public:
+   template <typename... TFuncs>
+   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncs&&... funcs)
+   {
+      MatrixStaticWalker<TDims...>::Walk(
+         GetRunner(matrixValues, funcs...));
+   }
+
+   template <typename TCurrentFunc, typename... TRemainingFuncs>
+      requires(sizeof...(TRemainingFuncs) > 0)
+   static constexpr auto GetRunner(std::span<T, TotalVecSize<TDims...>()> matrixValues,
+      TCurrentFunc&& currentFunc, TRemainingFuncs&&... remaining)
+   {
+      return [matrixValues, remaining...,
+                f = std::forward<TCurrentFunc>(currentFunc)](size_t flatIdx, auto&&... indices)
+      {
+         // Call ourselves
+         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
+
+         // Since we know there's at least one more, call the next.
+         auto nextCall = GetRunner(matrixValues, remaining...);
+         nextCall(flatIdx, indices...);
+      };
+   }
+
+   template <typename TCurrentFunc>
+   static constexpr auto GetRunner(
+      std::span<T, TotalVecSize<TDims...>()> matrixValues, TCurrentFunc&& currentFunc)
+   {
+      return [matrixValues, f = std::forward<TCurrentFunc>(currentFunc)](
+                size_t flatIdx, auto&&... indices)
+      {
+         // Call ourselves
+         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
+      };
+   }
+
+private:
    template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, T&>
    static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
