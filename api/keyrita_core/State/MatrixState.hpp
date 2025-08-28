@@ -350,6 +350,13 @@ public:
       return *this;
    }
 
+   template <typename... TFuncs>
+   MatrixState& Ops(TFuncs&&... funcs)
+   {
+      MatrixOps<T, TDims...>::Run(mValue, funcs...);
+      return *this;
+   }
+
    /**
     * @brief      Sets the value at a given flat index.
     *
