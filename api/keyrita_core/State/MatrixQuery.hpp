@@ -88,50 +88,6 @@ concept MatrixBulkAction =
    };
 
 /**
- * @brief      Concept defining an immutable walk through the array (one call per element)
- *
- * @tparam     T         The type parameter of the matrix T
- * @tparam     TNumDims  The number of dimensions in the matrix
- * @tparam     TFunc     The function called per element
- * @tparam     TIdx      The indices passed to the function.
- */
-template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
-concept MatrixImmutableWalkClient =
-   MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, const T& value, TIdx... indices) {
-      { func(value, indices...) };
-   };
-
-/**
- * @brief      Concept defining a mutable walk through any matrix.
- *
- * @tparam     T         The type parameter of the matrix T
- * @tparam     TNumDims  The number of dimensions in the matrix
- * @tparam     TFunc     The function called per element
- * @tparam     TIdx      The indices passed to the function.
- */
-template <typename T, typename TFunc, size_t TNumDims, typename... TIdx>
-concept MatrixMutableWalkClient =
-   MatrixIndices<TNumDims, TIdx...> && requires(TFunc func, T& value, TIdx... indices) {
-      { func(value, indices...) };
-   };
-
-/**
- * @brief      Concept defining the function parameters required for a fold operation.
- * [](const TFoldType& acc, const T& value, indices...) -> TFoldType
- *
- * @tparam     T         The type parameter of the matrix T
- * @tparam     TNumDims  The number of dimensions in the matrix
- * @tparam     TFunc     The function called per element
- * @tparam     TIdx      The indices passed to the function.
- */
-template <typename TFoldType, typename T, typename TFunc, size_t TNumDims, typename... TIdx>
-concept MatrixFoldClient =
-   MatrixIndices<TNumDims, TIdx...> &&
-   requires(TFoldType& initialValue, TFunc func, const T& value, TIdx... indices) {
-      { func(initialValue, value, indices...) };
-   };
-
-/**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
  *
  * @tparam     T           The type used
@@ -226,323 +182,403 @@ private:
    }
 };
 
-/**
- * @brief      Implements the foreach functional pattern.
- * [](const T& value, indices...) -> void;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixForEach
+template <typename TExec>
+concept MatrixFuncExHasResult = requires(TExec& exec)
+{
+   { exec.GetResult() };
+} && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
+
+template <typename TFunc> class ForEachEx
 {
 public:
-   template <typename TFunc>
-   static constexpr void Run(std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   /**
+    * @brief      Constructor: Create or inject state here.
+    */
+   ForEachEx(TFunc&& func) : mFunc(std::forward<TFunc>(func))
    {
-      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
    }
 
-   template <typename TFunc>
-   static constexpr auto GetRunner(
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
+   /**
+    * @brief      Callback from the executor, here you get the value, and the indices.
+    * Pass along to the client and do whatever you need with the result.
+    */
+   template <typename T, typename... TIdx>
+   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
-      return [matrixValues, f = std::forward<TFunc>(f)](size_t flatIdx, auto&&... indices)
+      CallClient(value, flatIndex, indices...);
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, indices...);
+   }
+
+   const TFunc mFunc;
+};
+
+template <typename TFunc> class CountIfEx
+{
+public:
+   CountIfEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mCount(0)
+   {
+   }
+
+   template <typename T, typename... TIdx>
+   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      if (CallClient(value, flatIndex, indices...))
       {
-         return Impl(f, matrixValues[flatIdx], flatIdx, indices...);
+         mCount++;
+      }
+   }
+
+   constexpr size_t GetResult()
+   {
+      size_t count = mCount;
+      mCount = 0;
+      return count;
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, indices...);
+   }
+
+   const TFunc mPred;
+   size_t mCount;
+};
+
+template <typename TFunc> class AllEx
+{
+public:
+   AllEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(true)
+   {
+   }
+
+   template <typename T, typename... TIdx>
+   constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      if (!CallClient(value, flatIndex, indices...))
+      {
+         mResult = false;
+         return false;
+      }
+
+      return true;
+   }
+
+   constexpr size_t GetResult()
+   {
+      return mResult;
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, indices...);
+   }
+
+   const TFunc mPred;
+   bool mResult;
+};
+
+template <typename TFunc> class AnyEx
+{
+public:
+   AnyEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(false)
+   {
+   }
+
+   template <typename T, typename... TIdx>
+   constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      if (CallClient(value, flatIndex, indices...))
+      {
+         mResult = true;
+         return false;
+      }
+
+      return true;
+   }
+
+   constexpr size_t GetResult()
+   {
+      return mResult;
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      return mPred(value, indices...);
+   }
+
+   const TFunc mPred;
+   bool mResult;
+};
+
+template <typename TFoldResult, typename TFunc> class FoldEx
+{
+public:
+   FoldEx(TFoldResult& result, TFunc&& pred) : mFunc(std::forward<TFunc>(pred)), mResult(result)
+   {
+   }
+
+   template <typename T, typename... TIdx>
+   constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      CallClient(value, flatIndex, indices...);
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, TFoldResult&, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResult, value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, TFoldResult&, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResult, value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, TFoldResult&, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResult, value, indices...);
+   }
+
+   const TFunc mFunc;
+   TFoldResult& mResult;
+};
+
+template <typename TFunc> class MapEx
+{
+public:
+   /**
+    * @brief      Constructor: Create or inject state here.
+    */
+   MapEx(TFunc&& func) : mFunc(std::forward<TFunc>(func))
+   {
+   }
+
+   /**
+    * @brief      Callback from the executor, here you get the value, and the indices.
+    * Pass along to the client and do whatever you need with the result.
+    */
+   template <typename T, typename... TIdx>
+   constexpr void Impl(T& value, size_t flatIndex, TIdx... indices)
+   {
+      CallClient(value, flatIndex, indices...);
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&>
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, T&, TIdx...>
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, indices...);
+   }
+
+   const TFunc mFunc;
+};
+
+template <typename T, size_t... TDims> class MatrixFuncExecutor
+{
+public:
+   /**
+    * @brief      Runs a function executor.
+    *
+    * @param[in]  matrixValues  The span of values representing the matrix.
+    * @param      ex            The function executor.
+    *
+    * @tparam     TFuncEx       Expected to have a member of type void Impl(const T& value, size_t
+    * flatIndex, TIdx... indices)
+    */
+   template <typename TFuncEx>
+   static constexpr auto Run(
+      std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncEx&& ex)
+   {
+      MatrixStaticWalker<TDims...>::Walk(
+         [matrixValues, &ex](size_t flatIdx, auto&&... indices)
+         {
+            // Return the result to see if it should be canceled.
+            return ex.Impl(matrixValues[flatIdx], flatIdx, indices...);
+         });
+
+      if constexpr (MatrixFuncExHasResult<TFuncEx>)
+      {
+         return ex.GetResult();
+      }
+   }
+};
+
+/**
+ * @brief      A valid op is defied by whether it has a GetRunner call which can be invoked by
+ * (size_t flatIndex, size_t... indices) where the size of indices matches the number of dimensions.
+ *
+ * @tparam     TOp    The class which executes the given operation
+ * @tparam     T      The typename T executed
+ * @tparam     TDims  The list of dimensions making up the matrix.
+ */
+template <class TOp, typename T, size_t... TDims>
+concept ValidMatrixOp = ScalarStateValue<T> && requires() {
+   { TOp::GetRunner() };
+};
+
+/**
+ * @brief      Passes if the series of ops in the given order can be executed on a matrix.
+ *
+ * Rules:
+ * 1. Each op's runner is executed in the order given. results can only be returned from the last op
+ * in the list.
+ * 2. Even if your op returns a bool, the operation will not be short circuited if called here.
+ *
+ * Unenforced rule:
+ * The actions are executed one after another in a single loop, All results must be computed
+ * based on the assumption that none of the other values in the matrix have been mutated yet.
+ */
+template <ScalarStateValue T, size_t... TDims> class MatrixOps
+{
+public:
+   template <typename... TFuncs>
+   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncs&&... funcs)
+   {
+      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, funcs...));
+   }
+
+   template <typename TCurrentFunc, typename... TRemainingFuncs>
+      requires(sizeof...(TRemainingFuncs) > 0)
+   static constexpr auto GetRunner(std::span<T, TotalVecSize<TDims...>()> matrixValues,
+      TCurrentFunc&& currentFunc, TRemainingFuncs&&... remaining)
+   {
+      return [matrixValues, remaining..., f = std::forward<TCurrentFunc>(currentFunc)](
+                size_t flatIdx, auto&&... indices)
+      {
+         // Call ourselves
+         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
+
+         // Since we know there's at least one more, call the next.
+         auto nextCall = GetRunner(matrixValues, remaining...);
+         nextCall(flatIdx, indices...);
+      };
+   }
+
+   template <typename TCurrentFunc>
+   static constexpr auto GetRunner(
+      std::span<T, TotalVecSize<TDims...>()> matrixValues, TCurrentFunc&& currentFunc)
+   {
+      return [matrixValues, f = std::forward<TCurrentFunc>(currentFunc)](
+                size_t flatIdx, auto&&... indices)
+      {
+         // Call ourselves
+         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
       };
    }
 
 private:
    template <typename TFunc, typename... TIdx>
-   static constexpr void Impl(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      CallClient(std::forward<TFunc>(f), value, flatIndex, indices...);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&>
-   static constexpr void CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, T&>
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
    {
       f(value);
    }
 
    template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr void CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
    {
       f(value, flatIndex);
    }
 
    template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   static constexpr void CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, T&, TIdx...>
+   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
    {
       f(value, indices...);
-   }
-};
-
-/**
- * @brief      Implements the All functional pattern. If all selected elements return true for the
- * predicate true is returned, false otherwise.
- * [](const T& value, indices...) -> bool;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixAllQuery
-{
-public:
-   template <typename TFunc>
-   static constexpr bool Run(
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      bool result;
-      MatrixStaticWalker<TDims...>::Walk(
-         GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
-      return result;
-   }
-
-   template <typename TFunc>
-   static constexpr auto GetRunner(
-      bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      result = true;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
-                size_t flatIdx, auto&&... indices)
-      {
-         return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc>
-   static constexpr bool Impl(
-      TFunc&& predicate, bool& result, const T& value, size_t flatIndex, auto&&... indices)
-   {
-      if (!CallClient(std::forward<TFunc>(predicate), value, flatIndex, indices...))
-      {
-         result = false;
-         return false;
-      }
-
-      return true;
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, indices...);
-   }
-};
-
-/**
- * @brief      Implements the All functional pattern. If all selected elements return true for the
- * predicate true is returned, false otherwise.
- * [](const T& value, indices...) -> bool;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixAnyQuery
-{
-public:
-   template <typename TFunc>
-   static constexpr bool Run(
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      bool result;
-      MatrixStaticWalker<TDims...>::Walk(
-         GetRunner(result, matrixValues, std::forward<TFunc>(predicate)));
-      return result;
-   }
-
-   template <typename TFunc>
-   static constexpr auto GetRunner(
-      bool& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      result = false;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
-                size_t flatIdx, auto&&... indices)
-      {
-         return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc>
-   static constexpr bool Impl(
-      TFunc&& predicate, bool& result, const T& value, size_t flatIndex, auto&&... indices)
-   {
-      if (CallClient(std::forward<TFunc>(predicate), value, flatIndex, indices...))
-      {
-         result = true;
-         return false;
-      }
-
-      return true;
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, indices...);
-   }
-};
-
-/**
- * @brief      Implements fold across a set of values in the given matrix.
- * [](const T& acc, const T& value, indices...) -> T;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixFoldQuery
-{
-public:
-   template <typename TFoldResult, typename TFunc>
-   static constexpr void Run(
-      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
-   {
-      MatrixStaticWalker<TDims...>::Walk(GetRunner(acc, matrixValues, std::forward<TFunc>(f)));
-   }
-
-   template <typename TFoldResult, typename TFunc>
-   static constexpr auto GetRunner(
-      TFoldResult& acc, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
-   {
-      return [matrixValues, &acc, f = std::forward<TFunc>(f)](size_t flatIdx, auto&&... indices)
-      {
-         return Impl(f, acc, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFoldResult, typename TFunc>
-   static constexpr void Impl(
-      TFunc&& f, TFoldResult& acc, const T& value, size_t flatIndex, auto&&... indices)
-   {
-      CallClient<TFoldResult>(std::forward<TFunc>(f), acc, value, flatIndex, indices...);
-   }
-
-   template <typename TFoldResult, typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, TFoldResult&, const T&>
-   static constexpr void CallClient(
-      TFunc&& f, TFoldResult& acc, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(acc, value);
-   }
-
-   template <typename TFoldResult, typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, TFoldResult&, const T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr void CallClient(
-      TFunc&& f, TFoldResult& acc, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(acc, value, flatIndex);
-   }
-
-   template <typename TFoldResult, typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, TFoldResult&, const T&, TIdx...>
-   static constexpr void CallClient(
-      TFunc&& f, TFoldResult& acc, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(acc, value, indices...);
-   }
-};
-
-/**
- * @brief      Implements the CountIf functional pattern. Each element that passes the predicate
- * increments a counter which is returned.
- * [](const T& value, indices...) -> bool;
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixCountIf
-{
-public:
-   template <typename TFunc>
-   static constexpr size_t Run(
-      std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      size_t count = 0;
-      MatrixStaticWalker<TDims...>::Walk(
-         GetRunner(count, matrixValues, std::forward<TFunc>(predicate)));
-
-      return count;
-   }
-
-   template <typename TFunc>
-   static constexpr auto GetRunner(
-      size_t& result, std::span<const T, TotalVecSize<TDims...>()> matrixValues, TFunc&& predicate)
-   {
-      result = 0;
-      return [matrixValues, &result, predicate = std::forward<TFunc>(predicate)](
-                size_t flatIdx, auto&&... indices)
-      {
-         return Impl(predicate, result, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc>
-   static constexpr void Impl(
-      TFunc&& predicate, size_t& count, const T& value, size_t flatIndex, auto&&... indices)
-   {
-      if (CallClient(std::forward<TFunc>(predicate), value, flatIndex, indices...))
-      {
-         count++;
-      }
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   static constexpr bool CallClient(TFunc&& f, const T& value, size_t flatIndex, TIdx... indices)
-   {
-      return f(value, indices...);
    }
 };
 
@@ -634,147 +670,6 @@ private:
    {
       // It takes in a single flat index, so compute that here.
       return predicate(value);
-   }
-};
-
-/**
- * @brief      Implements the map operator. Takes in one value and transforms it to another value.
- * [](T& value, indices...)
- *
- * @tparam     T      The type on which to operate.
- * @tparam     TDims  The static dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixMap
-{
-public:
-   template <typename TFunc>
-   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
-   {
-      MatrixStaticWalker<TDims...>::Walk(GetRunner(matrixValues, std::forward<TFunc>(f)));
-   }
-
-   template <typename TFunc>
-   static constexpr auto GetRunner(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFunc&& f)
-   {
-      return [matrixValues, f = std::forward<TFunc>(f)](size_t flatIdx, auto&&... indices)
-      {
-         return Impl(f, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc>
-   static constexpr void Impl(TFunc&& f, T& value, size_t flatIndex, auto&&... indices)
-   {
-      CallClient(std::forward<TFunc>(f), value, flatIndex, indices...);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, TIdx...>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, indices...);
-   }
-};
-
-/**
- * @brief      A valid op is defied by whether it has a GetRunner call which can be invoked by
- * (size_t flatIndex, size_t... indices) where the size of indices matches the number of dimensions.
- *
- * @tparam     TOp    The class which executes the given operation
- * @tparam     T      The typename T executed
- * @tparam     TDims  The list of dimensions making up the matrix.
- */
-template <class TOp, typename T, size_t... TDims>
-concept ValidMatrixOp = ScalarStateValue<T> && requires() {
-   { TOp::GetRunner() };
-};
-
-/**
- * @brief      Passes if the series of ops in the given order can be executed on a matrix.
- *
- * Rules:
- * 1. Each op's runner is executed in the order given. results can only be returned from the last op
- * in the list.
- * 2. Even if your op returns a bool, the operation will not be short circuited if called here.
- *
- * Unenforced rule:
- * The actions are executed one after another in a single loop, All results must be computed
- * based on the assumption that none of the other values in the matrix have been mutated yet.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixOps
-{
-public:
-   template <typename... TFuncs>
-   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncs&&... funcs)
-   {
-      MatrixStaticWalker<TDims...>::Walk(
-         GetRunner(matrixValues, funcs...));
-   }
-
-   template <typename TCurrentFunc, typename... TRemainingFuncs>
-      requires(sizeof...(TRemainingFuncs) > 0)
-   static constexpr auto GetRunner(std::span<T, TotalVecSize<TDims...>()> matrixValues,
-      TCurrentFunc&& currentFunc, TRemainingFuncs&&... remaining)
-   {
-      return [matrixValues, remaining...,
-                f = std::forward<TCurrentFunc>(currentFunc)](size_t flatIdx, auto&&... indices)
-      {
-         // Call ourselves
-         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
-
-         // Since we know there's at least one more, call the next.
-         auto nextCall = GetRunner(matrixValues, remaining...);
-         nextCall(flatIdx, indices...);
-      };
-   }
-
-   template <typename TCurrentFunc>
-   static constexpr auto GetRunner(
-      std::span<T, TotalVecSize<TDims...>()> matrixValues, TCurrentFunc&& currentFunc)
-   {
-      return [matrixValues, f = std::forward<TCurrentFunc>(currentFunc)](
-                size_t flatIdx, auto&&... indices)
-      {
-         // Call ourselves
-         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, TIdx...>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, indices...);
    }
 };
 }   // namespace kc
