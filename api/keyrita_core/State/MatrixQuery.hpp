@@ -495,19 +495,6 @@ public:
 };
 
 /**
- * @brief      A valid op is defied by whether it has a GetRunner call which can be invoked by
- * (size_t flatIndex, size_t... indices) where the size of indices matches the number of dimensions.
- *
- * @tparam     TOp    The class which executes the given operation
- * @tparam     T      The typename T executed
- * @tparam     TDims  The list of dimensions making up the matrix.
- */
-template <class TOp, typename T, size_t... TDims>
-concept ValidMatrixOp = ScalarStateValue<T> && requires() {
-   { TOp::GetRunner() };
-};
-
-/**
  * @brief      Passes if the series of ops in the given order can be executed on a matrix.
  *
  * Rules:
@@ -523,13 +510,33 @@ template <ScalarStateValue T, size_t... TDims> class MatrixOps
 {
 public:
    template <typename... TOps>
-   static constexpr void Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOps&&... ops)
+   static constexpr auto Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOps&&... ops)
    {
       MatrixStaticWalker<TDims...>::Walk(
-         [matrixValues, &ops...](size_t flatIdx, auto&&... indices)
+         [matrixValues, &ops...](size_t flatIdx, auto&&... indices) -> void
          {
+            // Note that nothing is returned since we don't ever want to cancel the walker
+            // during a bulk operation.
             ((ops.Impl(matrixValues[flatIdx], flatIdx, indices...), ...));
          });
+
+      return ReturnLastOp(ops...);
+   }
+
+private:
+   template <typename TCurrentOp, typename... TRemainingOps>
+   static constexpr auto ReturnLastOp(TCurrentOp&& currentOp, TRemainingOps&&... remainingOps)
+   {
+      return ReturnLastOp(remainingOps...);
+   }
+
+   template <typename TCurrentOp>
+   static constexpr auto ReturnLastOp(TCurrentOp&& currentOp)
+   {
+      if constexpr (MatrixFuncExHasResult<TCurrentOp>)
+      {
+         return currentOp.GetResult();
+      }
    }
 };
 

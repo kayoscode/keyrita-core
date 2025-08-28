@@ -351,10 +351,9 @@ public:
       return *this;
    }
 
-   template <typename... TFuncs> MatrixState& Ops(TFuncs&&... funcs)
+   template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
    {
-      MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
-      return *this;
+      return MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
    }
 
    /**

@@ -1,4 +1,5 @@
 #include "keyrita_core/State.hpp"
+#include "keyrita_core/State/MatrixQuery.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -1021,12 +1022,83 @@ TEST(StateTests, TestMatrixFold)
    TestMatrixFold<HeapMatrixState, 5, 1, 2>::Test();
    TestMatrixFold<StaticVectorState, 10>::Test();
    TestMatrixFold<StaticMatrixState, 5, 1, 2>::Test();
-
 }
 
 TEST(StateTests, TestMatrixFindIf)
 {
    TestMatrixFindIf::Test();
+}
+
+TEST(StateTests, TestMatrixChainedOps)
+{
+   HeapMatrixState<int, 10, 10> matrix(10);
+
+   // Test one op.
+   matrix.Ops(MapEx(
+      [](int& value, size_t flatSize)
+      {
+         value = flatSize;
+      }));
+
+   ASSERT_TRUE(matrix.All(
+      [](int value, size_t flatIdx)
+      {
+         return value == flatIdx;
+      }));
+
+   // Test our all operaiton inside ops.
+   ASSERT_TRUE(matrix.Ops(AllEx(
+      [](int value, size_t flatIdx)
+      {
+         return value == flatIdx;
+      })));
+
+   ASSERT_FALSE(matrix.Ops(AnyEx(
+      [](int value, size_t flatIdx)
+      {
+         return value != flatIdx;
+      })));
+
+   // Test a map and sum followed by a query.
+   size_t sum = 0;
+   bool result = matrix.Ops(MapEx(
+                               [&matrix](int& value, size_t x, size_t y)
+                               {
+                                  value = matrix.ToFlatIndex(x, y);
+                               }),
+      FoldEx(sum,
+         [](size_t& sum, int value)
+         {
+            sum += value;
+         }),
+      AllEx(
+         [](int value)
+         {
+            return true;
+         }));
+
+   ASSERT_EQ(sum, Trianglate(matrix.GetFlatSize() - 1));
+   ASSERT_TRUE(result);
+
+   sum = 0;
+   result = matrix.Ops(MapEx(
+                               [&matrix](int& value, size_t x, size_t y)
+                               {
+                                  value = matrix.ToFlatIndex(x, y);
+                               }),
+      FoldEx(sum,
+         [](size_t& sum, int value)
+         {
+            sum += value;
+         }),
+      AnyEx(
+         [](int value)
+         {
+            return false;
+         }));
+
+   ASSERT_EQ(sum, Trianglate(matrix.GetFlatSize() - 1));
+   ASSERT_FALSE(result);
 }
 
 TEST(StateTests, TestIndexConversions)

@@ -5,7 +5,7 @@
 #include <iostream>
 
 using namespace kc;
-using mat_t = int;
+using mat_t = uint32_t;
 
 int main()
 {
@@ -13,7 +13,7 @@ int main()
 
    Timer t;
    size_t sum = 0;
-   matrix.Ops(
+   bool result = matrix.Ops(
         MapEx([](mat_t& value, size_t flatIdx)
         {
             value = flatIdx;
@@ -21,8 +21,18 @@ int main()
         FoldEx(sum, [](size_t& acc, mat_t value)
         {
             acc += value;
-        }));
+        }),
+        AnyEx([](mat_t value, size_t flatIdx)
+        {
+            if (flatIdx != value)
+            {
+               std::cout << flatIdx << "\n";
+            }
+            return value != flatIdx;
+        }
+        ));
 
    std::cout << t.Milliseconds() << "\n";
    std::cout << sum << "\n";
+   std::cout << result << "\n";
 }
