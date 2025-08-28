@@ -1,6 +1,6 @@
 #pragma once
 
-#include "keyrita_core/State.h"
+#include "keyrita_core/State/StateBase.hpp"
 
 namespace kc
 {

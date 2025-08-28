@@ -1,27 +1,38 @@
-#include "keyrita_core/MatrixState.h"
-#include <Timer.h>
+#include "keyrita_core/State.hpp"
+#include "keyrita_core/State/MatrixQuery.hpp"
+
+#include <Timer.hpp>
 #include <iostream>
 
 using namespace kc;
-using mat_t = size_t;
+using mat_t = uint32_t;
 
 int main()
 {
    HeapMatrixState<mat_t, 50000, 50000> matrix(10);
 
    Timer t;
-   matrix.Map(
-      [](mat_t& value, size_t idx)
-      {
-         value = idx;
-      });
-
    size_t sum = 0;
-   matrix.Fold(sum, [](size_t& currentSum, mat_t value)
-   {
-      currentSum += value;
-   });
+   bool result = matrix.Ops(
+        MapEx([](mat_t& value, size_t flatIdx)
+        {
+            value = flatIdx;
+        }),
+        FoldEx(sum, [](size_t& acc, mat_t value)
+        {
+            acc += value;
+        }),
+        AnyEx([](mat_t value, size_t flatIdx)
+        {
+            if (flatIdx != value)
+            {
+               std::cout << flatIdx << "\n";
+            }
+            return value != flatIdx;
+        }
+        ));
 
-   std::cout << t.Milliseconds() << "\n";   
+   std::cout << t.Milliseconds() << "\n";
    std::cout << sum << "\n";
+   std::cout << result << "\n";
 }
