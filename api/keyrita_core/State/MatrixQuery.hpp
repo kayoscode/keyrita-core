@@ -183,8 +183,7 @@ private:
 };
 
 template <typename TExec>
-concept MatrixFuncExHasResult = requires(TExec& exec)
-{
+concept MatrixFuncExHasResult = requires(TExec& exec) {
    { exec.GetResult() };
 } && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
 
@@ -479,8 +478,7 @@ public:
     * flatIndex, TIdx... indices)
     */
    template <typename TFuncEx>
-   static constexpr auto Run(
-      std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncEx&& ex)
+   static constexpr auto Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncEx&& ex)
    {
       MatrixStaticWalker<TDims...>::Walk(
          [matrixValues, &ex](size_t flatIdx, auto&&... indices)
@@ -545,40 +543,6 @@ public:
          auto nextCall = GetRunner(matrixValues, remaining...);
          nextCall(flatIdx, indices...);
       };
-   }
-
-   template <typename TCurrentFunc>
-   static constexpr auto GetRunner(
-      std::span<T, TotalVecSize<TDims...>()> matrixValues, TCurrentFunc&& currentFunc)
-   {
-      return [matrixValues, f = std::forward<TCurrentFunc>(currentFunc)](
-                size_t flatIdx, auto&&... indices)
-      {
-         // Call ourselves
-         CallClient(f, matrixValues[flatIdx], flatIdx, indices...);
-      };
-   }
-
-private:
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, flatIndex);
-   }
-
-   template <typename TFunc, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, TIdx...>
-   static constexpr void CallClient(TFunc&& f, T& value, size_t flatIndex, TIdx... indices)
-   {
-      f(value, indices...);
    }
 };
 

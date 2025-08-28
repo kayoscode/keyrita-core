@@ -9,43 +9,21 @@ using mat_t = int;
 
 int main()
 {
-   HeapMatrixState<mat_t, 10> matrix(10);
+   HeapMatrixState<mat_t, 50000, 50000> matrix(10);
 
-   matrix.ForEach([](mat_t value)
+   Timer t;
+   matrix.Map(
+      [&matrix](mat_t& value, size_t idx)
+      {
+         value = idx;
+      });
+
+   size_t sum = 0;
+   matrix.Fold(sum, [](size_t& currentSum, mat_t value)
    {
-      std::cout << value << "\n";
+      currentSum += value;
    });
 
-   // ForEachEx ex([](mat_t value, size_t flat)
-   // {
-   //    std::cout << value << " " << flat << "\n";
-   // });
-
-   // matrix.Ops(
-   //    [](mat_t value)
-   //    {
-   //       std::cout << value * 2 << "\n";
-   //    },
-   //    [](mat_t value)
-   //    {
-   //       std::cout << value * 4 << "\n";
-   //    });
-
-   // Timer t;
-   // matrix.Map(
-   //    [&matrix](mat_t& value, size_t idx)
-   //    {
-   //       value = idx;
-   //    });
-
-   // size_t sum = 0;
-   // matrix.Fold(sum, [](size_t& currentSum, mat_t value)
-   // {
-   //    currentSum += value;
-   // });
-
-   // std::cout << t.Milliseconds() << "\n";
-   // std::cout << sum << "\n";
-
-   // HeapMatrixState<mat_t, 10> matOps();
+   std::cout << t.Milliseconds() << "\n";
+   std::cout << sum << "\n";
 }
