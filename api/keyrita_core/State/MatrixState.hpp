@@ -3,6 +3,7 @@
 #include "keyrita_core/State/StateBase.hpp"
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
+#include <memory>
 
 namespace kc
 {
@@ -174,7 +175,10 @@ public:
     * @brief      Returns a readonly view of the data.
     * @return     The readonly data view as a span.
     */
-   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const = 0;
+   constexpr std::span<const T, TotalVecSize<TDims...>()> GetValues() const
+   {
+      return *mRawData;
+   }
 
    /**
     * @brief      Returns a raw pointer to the underlying flat matrix values.
@@ -237,6 +241,19 @@ public:
       return FlatSize;
    }
 
+protected:
+   /**
+    * @brief      Sets the span of data used by the readonly view. Can be modified at runtime.
+    * This is an EXPENSIVE call. It's wise to avoid swapping the underlying data if at all possible.
+    */
+   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()> data)
+   {
+      mRawData = std::make_unique<std::span<const T, TotalVecSize<TDims...>()>>(data);
+   }
+
+   // Store a poointer to the raw data here.
+   std::unique_ptr<std::span<const T, TotalVecSize<TDims...>()>> mRawData;
+
 private:
    // Store the flat size of the array as a const in the base class.
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
@@ -265,6 +282,7 @@ public:
     */
    MatrixState() : mValue(mAllocator.GetVec())
    {
+      this->SetReadOnlyData(mValue);
    }
 
    /**
@@ -335,15 +353,6 @@ public:
    {
       setter(mValue, FlatSize);
       return *this;
-   }
-
-   /**
-    * @brief      Returns a readonly view of the data.
-    * @return     The readonly data view as a span.
-    */
-   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const override
-   {
-      return mValue;
    }
 
    /**
