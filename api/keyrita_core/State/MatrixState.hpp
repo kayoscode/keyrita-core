@@ -1,8 +1,8 @@
 #pragma once
 
-#include "keyrita_core/State/StateBase.hpp"
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
+#include "keyrita_core/State/StateBase.hpp"
 #include <memory>
 
 namespace kc
@@ -101,7 +101,8 @@ public:
     */
    template <typename TFunc> size_t CountIf(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), CountIfEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<const T, TDims...>::Run(
+         GetValues(), CountIfEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -116,7 +117,8 @@ public:
     */
    template <typename TFunc> bool All(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), AllEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<const T, TDims...>::Run(
+         GetValues(), AllEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -131,7 +133,8 @@ public:
     */
    template <typename TFunc> bool Any(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), AnyEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<const T, TDims...>::Run(
+         GetValues(), AnyEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -146,7 +149,8 @@ public:
    template <typename TFoldResult = T, typename TFunc>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), FoldEx(initialValue, std::forward<TFunc>(func)));
+      MatrixFuncExecutor<const T, TDims...>::Run(
+         GetValues(), FoldEx(initialValue, std::forward<TFunc>(func)));
    }
 
    /**
@@ -218,7 +222,7 @@ public:
     *
     * @return     The dim size at the given dimension
     */
-   template <size_t TDimIndex> size_t GetDimSize() const
+   template <size_t TDimIndex> size_t constexpr GetDimSize() const
    {
       return GetDimSizeImpl<TDimIndex, TDims...>();
    }
@@ -228,7 +232,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   size_t ToFlatIndex(TIdx... indices) const
+   constexpr size_t ToFlatIndex(TIdx... indices) const
    {
       return ComputeFlatIndex<TDims...>(indices...);
    }
@@ -236,23 +240,23 @@ public:
    /**
     * @return     The total number of elements in this matrix.
     */
-   size_t GetFlatSize() const
+   constexpr size_t GetFlatSize() const
    {
       return FlatSize;
    }
 
 protected:
    /**
-    * @brief      Sets the span of data used by the readonly view. Can be modified at runtime.
-    * This is an EXPENSIVE call. It's wise to avoid swapping the underlying data if at all possible.
+    * @brief      Sets the readonly memory view for this matrix. This can be changed at runtime if
+    * needed.
     */
-   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()> data)
+   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()>& data)
    {
-      mRawData = std::make_unique<std::span<const T, TotalVecSize<TDims...>()>>(data);
+      mRawData = &data;
    }
 
    // Store a poointer to the raw data here.
-   std::unique_ptr<std::span<const T, TotalVecSize<TDims...>()>> mRawData;
+   std::span<const T, TotalVecSize<TDims...>()>* mRawData;
 
 private:
    // Store the flat size of the array as a const in the base class.
@@ -282,7 +286,7 @@ public:
     */
    MatrixState() : mValue(mAllocator.GetVec())
    {
-      this->SetReadOnlyData(mValue);
+      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValue));
    }
 
    /**
@@ -403,7 +407,8 @@ public:
  */
 template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t TSize>
    requires MatrixAlloc<TAlloc, T, TSize>
-class VectorState : public virtual MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
+class VectorState : public virtual MatrixState<TAlloc, T, TSize>,
+                    public virtual IVectorState<T, TSize>
 {
 public:
    /**
@@ -423,8 +428,7 @@ template <ScalarStateValue T, size_t... TDims>
 class StaticMatrixState : public virtual MatrixState<MatrixStaticAlloc, T, TDims...>
 {
 public:
-   StaticMatrixState()
-      : MatrixState<MatrixStaticAlloc, T, TDims...>()
+   StaticMatrixState() : MatrixState<MatrixStaticAlloc, T, TDims...>()
    {
    }
 };
@@ -433,8 +437,7 @@ template <ScalarStateValue T, size_t... TDims>
 class HeapMatrixState : public virtual MatrixState<MatrixHeapAlloc, T, TDims...>
 {
 public:
-   HeapMatrixState()
-      : MatrixState<MatrixHeapAlloc, T, TDims...>()
+   HeapMatrixState() : MatrixState<MatrixHeapAlloc, T, TDims...>()
    {
    }
 };
@@ -443,8 +446,7 @@ template <ScalarStateValue T, size_t TSize>
 class StaticVectorState : public virtual VectorState<MatrixStaticAlloc, T, TSize>
 {
 public:
-   StaticVectorState()
-      : VectorState<MatrixStaticAlloc, T, TSize>()
+   StaticVectorState() : VectorState<MatrixStaticAlloc, T, TSize>()
    {
    }
 };
