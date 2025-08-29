@@ -9,7 +9,8 @@ using mat_t = uint32_t;
 
 int main()
 {
-   HeapMatrixState<mat_t, 50000, 50000> matrix(10);
+   HeapMatrixState<mat_t, 5000, 5000> matrix;
+   matrix.SetValues(10);
 
    Timer t;
    size_t sum = 0;

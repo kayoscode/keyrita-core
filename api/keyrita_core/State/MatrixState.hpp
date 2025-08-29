@@ -1,50 +1,15 @@
 #pragma once
 
+#include "keyrita_core/State/StateBase.hpp"
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
-#include "keyrita_core/State/StateBase.hpp"
 
 namespace kc
 {
 /**
- * @brief      Class representing a read only view of a matrix state object
- *
- * @tparam     T      The type stored in the matrix.
- * @tparam     TDims  The original dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class IMatrixView
-{
-public:
-   using value_type = T;
-
-   /**
-    * @brief      Standard constructor
-    * @param[in]  rawData  A raw pointer to readonly memory over which this view will operate.
-    */
-   IMatrixView(const std::span<const T, TotalVecSize<TDims...>()> rawData) : mRawMatrix(rawData)
-   {
-   }
-
-private:
-   std::span<const T, TotalVecSize<TDims...>()> mRawMatrix;
-   std::array<std::tuple<size_t, size_t>, sizeof...(TDims)> mSlice;
-};
-
-/**
- * @brief      Class representing a read/write view of a matrix state object
- *
- * @tparam     T      The type stored in the matrix.
- * @tparam     TDims  The original dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixView : public IMatrixView<T, TDims...>
-{
-public:
-};
-
-/**
  * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
  */
-template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
+template <ScalarStateValue T, size_t... TDims> class IMatrixState
 {
 public:
    // Accessors
@@ -288,7 +253,7 @@ private:
  */
 template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t... TDims>
    requires MatrixAlloc<TAlloc, T, TotalVecSize<TDims...>()>
-class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
+class MatrixState : public virtual IMatrixState<T, TDims...>
 {
 public:
    using allocator_type = TAlloc<T, TDims...>;
@@ -298,9 +263,8 @@ public:
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   MatrixState(const T& defaultScalar) : mDefaultScalar(defaultScalar), mValue(mAllocator.GetVec())
+   MatrixState() : mValue(mAllocator.GetVec())
    {
-      SetToDefault();
    }
 
    /**
@@ -311,26 +275,6 @@ public:
    T& operator()(TIdx... indices)
    {
       return mValue[this->ToFlatIndex(indices...)];
-   }
-
-   /**
-    * @return     True if at default, False otherwise.
-    */
-   virtual bool IsAtDefault() const override
-   {
-      return this->All(
-         [this](const T& value)
-         {
-            return value == mDefaultScalar;
-         });
-   }
-
-   /**
-    * @brief      Sets the current value to the default scalar for every element.
-    */
-   virtual void SetToDefault() override
-   {
-      SetValues(mDefaultScalar);
    }
 
    /**
@@ -347,7 +291,6 @@ public:
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
       MatrixFuncExecutor<T, TDims...>::Run(mValue, MapEx(std::forward<TFunc>(mapper)));
-      SignalValueChange();
       return *this;
    }
 
@@ -366,7 +309,6 @@ public:
    {
       assert(flatIndex < FlatSize);
       mValue[flatIndex] = value;
-      SignalValueChange();
    }
 
    /**
@@ -392,7 +334,6 @@ public:
    MatrixState& SetValues(TFunc&& setter)
    {
       setter(mValue, FlatSize);
-      SignalValueChange();
       return *this;
    }
 
@@ -427,7 +368,6 @@ private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
    TAlloc<T, TDims...> mAllocator;
    std::span<T, FlatSize> mValue;
-   T mDefaultScalar;
 };
 
 // Vectors
@@ -454,7 +394,7 @@ public:
  */
 template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t TSize>
    requires MatrixAlloc<TAlloc, T, TSize>
-class VectorState : public MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
+class VectorState : public virtual MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
 {
 public:
    /**
@@ -462,7 +402,7 @@ public:
     *
     * @param[in]  defaultScalar  The default value for every element in the vector state.
     */
-   VectorState(const T& defaultScalar) : MatrixState<TAlloc, T, TSize>(defaultScalar)
+   VectorState() : MatrixState<TAlloc, T, TSize>()
    {
    }
 };
@@ -471,40 +411,40 @@ public:
  * Helper definitions.
  */
 template <ScalarStateValue T, size_t... TDims>
-class StaticMatrixState : public MatrixState<MatrixStaticAlloc, T, TDims...>
+class StaticMatrixState : public virtual MatrixState<MatrixStaticAlloc, T, TDims...>
 {
 public:
-   StaticMatrixState(const T& defaultScalar)
-      : MatrixState<MatrixStaticAlloc, T, TDims...>(defaultScalar)
+   StaticMatrixState()
+      : MatrixState<MatrixStaticAlloc, T, TDims...>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t... TDims>
-class HeapMatrixState : public MatrixState<MatrixHeapAlloc, T, TDims...>
+class HeapMatrixState : public virtual MatrixState<MatrixHeapAlloc, T, TDims...>
 {
 public:
-   HeapMatrixState(const T& defaultScalar)
-      : MatrixState<MatrixHeapAlloc, T, TDims...>(defaultScalar)
+   HeapMatrixState()
+      : MatrixState<MatrixHeapAlloc, T, TDims...>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t TSize>
-class StaticVectorState : public VectorState<MatrixStaticAlloc, T, TSize>
+class StaticVectorState : public virtual VectorState<MatrixStaticAlloc, T, TSize>
 {
 public:
-   StaticVectorState(const T& defaultScalar)
-      : VectorState<MatrixStaticAlloc, T, TSize>(defaultScalar)
+   StaticVectorState()
+      : VectorState<MatrixStaticAlloc, T, TSize>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t TSize>
-class HeapVectorState : public VectorState<MatrixHeapAlloc, T, TSize>
+class HeapVectorState : public virtual VectorState<MatrixHeapAlloc, T, TSize>
 {
 public:
-   HeapVectorState(const T& defaultScalar) : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
+   HeapVectorState() : VectorState<MatrixHeapAlloc, T, TSize>()
    {
    }
 };

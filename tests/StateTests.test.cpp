@@ -136,7 +136,8 @@ TEST(StateTests, EnumStateTests)
 
 TEST(StateTests, GeneralVectorStateTests)
 {
-   StaticVectorState<int, 30> vec(1);
+   StaticVectorState<int, 30> vec;
+   vec.SetValues(1);
    IVectorState<int, 30>& roVec = vec;
 
    // Check if default works.
@@ -145,13 +146,6 @@ TEST(StateTests, GeneralVectorStateTests)
       {
          return value == 1;
       }));
-
-   int writeCount = 0;
-   roVec.OnChanged().Register(
-      [&writeCount](const tStateChangedEventData& data)
-      {
-         writeCount++;
-      });
 
    ASSERT_EQ(vec.GetFlatSize(), roVec.GetFlatSize());
    ASSERT_EQ(vec.GetFlatSize(), 30);
@@ -184,14 +178,6 @@ TEST(StateTests, GeneralVectorStateTests)
          return value == 1;
       }));
 
-   ASSERT_FALSE(vec.IsAtDefault());
-   vec.SetToDefault();
-   ASSERT_TRUE(vec.IsAtDefault());
-
-   vec.SetValues(2);
-
-   ASSERT_FALSE(vec.IsAtDefault());
-
    // Check a few of the functional things
    vec.Map(
          [](int& value, size_t index)
@@ -209,10 +195,6 @@ TEST(StateTests, GeneralVectorStateTests)
             ASSERT_EQ(value, (index + 1) * 2);
          });
 
-   // Finally test set values
-   vec.SetToDefault();
-   ASSERT_TRUE(roVec.IsAtDefault());
-
    vec.SetValues(
       [](std::span<int> values, size_t count)
       {
@@ -227,9 +209,6 @@ TEST(StateTests, GeneralVectorStateTests)
       {
          return value == 30;
       }));
-
-   // Check that the callback has been called.
-   ASSERT_TRUE(writeCount > 0);
 }
 
 typedef size_t func_test_t;
@@ -242,13 +221,7 @@ public:
    constexpr static void Test()
    {
       // Set to something that's non zero.
-      mat_t matrix(10);
-
-      // Test defaulting.
-      MatrixUtils::FillSequence(matrix);
-      ASSERT_FALSE(matrix.IsAtDefault());
-      matrix.SetToDefault();
-      ASSERT_TRUE(matrix.IsAtDefault());
+      mat_t matrix;
 
       // Test size and dimensions query.
       size_t expectedSize = 1;
@@ -323,8 +296,7 @@ public:
 
    constexpr static void Test()
    {
-      // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
       TestNoArg(matrix);
       TestOneArg(matrix);
       TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
@@ -418,8 +390,7 @@ public:
 
    static void Test()
    {
-      // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
       TestNoArg(matrix);
       TestOneArg(matrix);
       TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
@@ -525,8 +496,7 @@ public:
 
    static void Test()
    {
-      // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
       TestNoArg(matrix);
       TestOneArg(matrix);
       TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
@@ -596,8 +566,7 @@ public:
 
    static void Test()
    {
-      // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
       TestNoArg(matrix);
       TestOneArg(matrix);
       TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
@@ -694,7 +663,7 @@ public:
    static void Test()
    {
       // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
       TestNoArg(matrix);
       TestOneArg(matrix);
       TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
@@ -791,8 +760,7 @@ public:
 
    static void Test()
    {
-      // Create a non-zero default
-      mat_t matrix(10);
+      mat_t matrix;
 
       TestNoArg(matrix);
       TestOneArg(matrix);
@@ -872,7 +840,7 @@ public:
       size_t x, y, z;
       bool found = false;
 
-      StaticVectorState<func_test_t, 10> vec(0);
+      StaticVectorState<func_test_t, 10> vec;
       MatrixUtils::FillSequence(vec);
 
       // Find the first and last elements.
@@ -895,7 +863,7 @@ public:
       ASSERT_TRUE(found);
 
       // Test on a matrix and test each combination of parameters.
-      HeapMatrixState<func_test_t, 10, 10, 10> matrix(0);
+      HeapMatrixState<func_test_t, 10, 10, 10> matrix;
       MatrixUtils::FillSequence(matrix);
 
       // Find without taking in any indices.
@@ -1031,7 +999,7 @@ TEST(StateTests, TestMatrixFindIf)
 
 TEST(StateTests, TestMatrixChainedOps)
 {
-   HeapMatrixState<int, 10, 10> matrix(10);
+   HeapMatrixState<int, 10, 10> matrix;
 
    // Test one op.
    matrix.Ops(MapEx(
