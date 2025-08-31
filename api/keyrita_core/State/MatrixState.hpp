@@ -20,7 +20,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T operator()(TIdx&&... indices)
+   T operator()(TIdx... indices)
    {
       return GetValues()[ToFlatIndex(indices...)];
    }
@@ -38,7 +38,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   T GetValue(TIdx&&... indices)
+   T GetValue(TIdx... indices)
    {
       size_t flatIndex = ToFlatIndex(indices...);
       assert(flatIndex < FlatSize);
@@ -59,7 +59,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   const T& GetRef(TIdx&&... indices)
+   const T& GetRef(TIdx... indices)
    {
       size_t flatIndex = ToFlatIndex(indices...);
       assert(flatIndex < FlatSize);
@@ -231,7 +231,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   constexpr size_t ToFlatIndex(TIdx&&... indices) const
+   constexpr size_t ToFlatIndex(TIdx... indices) const
    {
       return ComputeFlatIndex<TDims...>(indices...);
    }
@@ -283,9 +283,9 @@ public:
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   MatrixState() : mValues(mAllocator.GetVec())
+   MatrixState() : mValue(mAllocator.GetVec())
    {
-      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValues));
+      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValue));
    }
 
    /**
@@ -293,9 +293,9 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T& operator()(TIdx&&... indices)
+   T& operator()(TIdx... indices)
    {
-      return mValues[this->ToFlatIndex(indices...)];
+      return mValue[this->ToFlatIndex(indices...)];
    }
 
    /**
@@ -311,13 +311,13 @@ public:
     */
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(mValues, MapEx(std::forward<TFunc>(mapper)));
+      MatrixFuncExecutor<T, TDims...>::Run(mValue, MapEx(std::forward<TFunc>(mapper)));
       return *this;
    }
 
    template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
    {
-      return MatrixOps<T, TDims...>::Run(mValues, std::forward<TFuncs>(funcs)...);
+      return MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
    }
 
    /**
@@ -329,7 +329,7 @@ public:
    virtual void SetValue(const T& value, size_t flatIndex)
    {
       assert(flatIndex < FlatSize);
-      mValues[flatIndex] = value;
+      mValue[flatIndex] = value;
    }
 
    /**
@@ -337,7 +337,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   MatrixState& SetValue(T value, TIdx&&... indices)
+   MatrixState& SetValue(T value, TIdx... indices)
    {
       this->SetValue(value, this->ToFlatIndex(indices...));
       return *this;
@@ -354,7 +354,7 @@ public:
       requires MatrixBulkAction<T, TFunc>
    MatrixState& SetValues(TFunc&& setter)
    {
-      setter(mValues, FlatSize);
+      setter(mValue, FlatSize);
       return *this;
    }
 
@@ -379,7 +379,7 @@ public:
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
    TAlloc<T, TDims...> mAllocator;
-   std::span<T, FlatSize> mValues;
+   std::span<T, FlatSize> mValue;
 };
 
 // Vectors
