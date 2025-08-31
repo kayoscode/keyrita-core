@@ -283,9 +283,9 @@ public:
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   MatrixState() : mValue(mAllocator.GetVec())
+   MatrixState() : mValues(mAllocator.GetVec())
    {
-      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValue));
+      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValues));
    }
 
    /**
@@ -295,7 +295,7 @@ public:
       requires MatrixIndices<sizeof...(TDims), TIdx...>
    T& operator()(TIdx... indices)
    {
-      return mValue[this->ToFlatIndex(indices...)];
+      return mValues[this->ToFlatIndex(indices...)];
    }
 
    /**
@@ -311,13 +311,13 @@ public:
     */
    template <typename TFunc> MatrixState& Map(TFunc&& mapper)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(mValue, MapEx(std::forward<TFunc>(mapper)));
+      MatrixFuncExecutor<T, TDims...>::Run(mValues, MapEx(std::forward<TFunc>(mapper)));
       return *this;
    }
 
    template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
    {
-      return MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
+      return MatrixOps<T, TDims...>::Run(mValues, std::forward<TFuncs>(funcs)...);
    }
 
    /**
@@ -329,7 +329,7 @@ public:
    virtual void SetValue(const T& value, size_t flatIndex)
    {
       assert(flatIndex < FlatSize);
-      mValue[flatIndex] = value;
+      mValues[flatIndex] = value;
    }
 
    /**
@@ -354,7 +354,7 @@ public:
       requires MatrixBulkAction<T, TFunc>
    MatrixState& SetValues(TFunc&& setter)
    {
-      setter(mValue, FlatSize);
+      setter(mValues, FlatSize);
       return *this;
    }
 
@@ -379,7 +379,7 @@ public:
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
    TAlloc<T, TDims...> mAllocator;
-   std::span<T, FlatSize> mValue;
+   std::span<T, FlatSize> mValues;
 };
 
 // Vectors
