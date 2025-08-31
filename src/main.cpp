@@ -1,5 +1,4 @@
 #include "keyrita_core/State.hpp"
-#include "keyrita_core/State/MatrixQuery.hpp"
 
 #include <Timer.hpp>
 #include <iostream>

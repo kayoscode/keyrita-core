@@ -59,7 +59,7 @@ constexpr size_t ComputeFlatIndexRecursive(TIdx idx, TRemainingIndices... remain
 
 template <size_t... TDims, typename... TIdx>
    requires MatrixIndices<sizeof...(TDims), TIdx...>
-constexpr size_t ComputeFlatIndex(TIdx... idx)
+constexpr size_t ComputeFlatIndex(TIdx&&... idx)
 {
    return ComputeFlatIndexRecursive<TDims...>(idx...);
 }
@@ -202,7 +202,7 @@ public:
     * Pass along to the client and do whatever you need with the result.
     */
    template <typename T, typename... TIdx>
-   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -210,21 +210,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value, indices...);
    }
@@ -240,7 +240,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       if (CallClient(value, flatIndex, indices...))
       {
@@ -258,21 +258,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, indices...);
    }
@@ -289,7 +289,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       if (!CallClient(value, flatIndex, indices...))
       {
@@ -308,21 +308,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, indices...);
    }
@@ -339,7 +339,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr bool Impl(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       if (CallClient(value, flatIndex, indices...))
       {
@@ -358,21 +358,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr bool CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       return mPred(value, indices...);
    }
@@ -389,7 +389,7 @@ public:
    }
 
    template <typename T, typename... TIdx>
-   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -397,21 +397,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, TFoldResult&, const T&>
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(mResult, value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, TFoldResult&, const T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(mResult, value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, TFoldResult&, const T&, TIdx...>
-   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(mResult, value, indices...);
    }
@@ -435,7 +435,7 @@ public:
     * Pass along to the client and do whatever you need with the result.
     */
    template <typename T, typename... TIdx>
-   inline constexpr void Impl(T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(T& value, size_t flatIndex, TIdx&&... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
@@ -443,21 +443,21 @@ public:
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, T&>
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, T&, TIdx...>
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+   constexpr void CallClient(T& value, size_t flatIndex, TIdx&&... indices)
    {
       mFunc(value, indices...);
    }
@@ -602,7 +602,7 @@ private:
     */
    template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, TIdx...>
-   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx&&... indices)
    {
       // Pass all the indices directly.
       return predicate(value, indices...);
@@ -613,7 +613,7 @@ private:
     */
    template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) != 1)
-   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx&&... indices)
    {
       // It takes in a single flat index, so compute that here.
       return predicate(value, ComputeFlatIndex<TDims...>(indices...));
@@ -624,7 +624,7 @@ private:
     */
    template <typename TFunc, typename... TIdx>
       requires std::is_invocable_v<TFunc, const T&>
-   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx... indices)
+   static constexpr bool CallClientHelper(const T& value, TFunc&& predicate, TIdx&&... indices)
    {
       // It takes in a single flat index, so compute that here.
       return predicate(value);
