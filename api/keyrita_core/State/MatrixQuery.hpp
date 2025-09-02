@@ -87,6 +87,17 @@ concept MatrixBulkAction =
       { predicate(values, count) } -> std::same_as<void>;
    };
 
+template <typename TExec>
+concept MatrixFuncExHasResult = requires(TExec& exec) {
+   { exec.GetResult() };
+} && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
+
+// Determines if a matrix result has the same type as given TResult (usually the input.)
+template <typename TResult, typename TExec>
+concept MatrixFuncHasSameResult = requires(TExec& exec) {
+      { exec.GetResult() } -> std::convertible_to<TResult>;
+   };
+
 /**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
  *
@@ -181,11 +192,6 @@ private:
       return true;
    }
 };
-
-template <typename TExec>
-concept MatrixFuncExHasResult = requires(TExec& exec) {
-   { exec.GetResult() };
-} && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
 
 template <typename TFunc> class ForEachEx
 {
@@ -420,6 +426,65 @@ private:
    TFoldResult& mResult;
 };
 
+template <typename TFunc, typename TMatrix> 
+// TODO: Enforce that the input is a matrix
+class NewMapEx
+{
+public:
+   /**
+    * @brief      Constructor: Create or inject state here.
+    */
+   NewMapEx(TFunc&& func, TMatrix& outMatrix) : mFunc(std::forward<TFunc>(func)),
+      mMatrix(outMatrix)
+   {
+   }
+
+   /**
+    * @brief      Callback from the executor, here you get the value, and the indices.
+    * Pass along to the client and do whatever you need with the result.
+    */
+   template <typename T, typename... TIdx>
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      CallClient(value, flatIndex, indices...);
+   }
+
+   /**
+    * @brief      Returns the result of the map operation, not done in place.
+    */
+   constexpr auto GetResult()
+   {
+      // Return the span of values.
+      return mMatrix.GetValues();
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      // TODO, we need a way to get a writable reference in the writable matrix interface.
+      mFunc(value, mMatrix(indices...));
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, mMatrix(indices...), flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(value, mMatrix(indices...), indices...);
+   }
+
+   const TFunc mFunc;
+   TMatrix& mMatrix;
+};
+
 template <typename TFunc> class MapEx
 {
 public:
@@ -515,15 +580,40 @@ public:
       MatrixStaticWalker<TDims...>::Walk(
          [matrixValues, &ops...](size_t flatIdx, auto&&... indices) -> void
          {
-            // Note that nothing is returned since we don't ever want to cancel the walker
-            // during a bulk operation.
-            ((ops.Impl(matrixValues[flatIdx], flatIdx, indices...), ...));
+            CallNextOps<TOps...>(matrixValues, std::forward<TOps>(ops)..., flatIdx, indices...);
          });
 
       return ReturnLastOp(ops...);
    }
 
 private:
+   template <typename TOp, typename... TNextOps>
+   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOp&& currentOp, TNextOps&&... nextOps, size_t flatIndex, auto... indices)
+   {
+      // First, call the current op.
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+
+      // At this point, we can see if the result of the last op in the chain was the same type as the input.
+      // If so, feed it forward into the remaining ops.
+      if constexpr (MatrixFuncHasSameResult<decltype(matrixValues), TOp>)
+      {
+         // Call with the input taken from the result.
+         CallNextOps<TNextOps...>(currentOp.GetResult(), std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
+      }
+      else 
+      {
+         // Call the next with the same input.
+         CallNextOps<TNextOps...>(matrixValues, std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
+      }
+   }
+
+   template <typename TOp>
+   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, 
+      TOp&& currentOp, size_t flatIndex, auto... indices)
+   {
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+   }
+
    template <typename TCurrentOp, typename... TRemainingOps>
    static constexpr auto ReturnLastOp(TCurrentOp&& currentOp, TRemainingOps&&... remainingOps)
    {
