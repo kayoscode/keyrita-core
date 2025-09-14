@@ -515,9 +515,8 @@ public:
       MatrixStaticWalker<TDims...>::Walk(
          [matrixValues, &ops...](size_t flatIdx, auto&&... indices) -> void
          {
-            // Note that nothing is returned since we don't ever want to cancel the walker
-            // during a bulk operation.
-            ((ops.Impl(matrixValues[flatIdx], flatIdx, indices...), ...));
+            // Recursively execute every op in order. This is all compile time.
+            ExecuteNextOp<TOps...>(matrixValues, std::forward<TOps>(ops)..., flatIdx, indices...);
          });
 
       return ReturnLastOp(ops...);
@@ -525,13 +524,27 @@ public:
 
 private:
    template <typename TCurrentOp, typename... TRemainingOps>
+   static constexpr void ExecuteNextOp(std::span<T, TotalVecSize<TDims...>()> matrixValues,
+      TCurrentOp&& currentOp, TRemainingOps&&... remainingOps, size_t flatIndex, auto... indices)
+   {
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+      ExecuteNextOp<TRemainingOps...>(matrixValues, std::forward<TRemainingOps>(remainingOps)..., flatIndex, indices...);
+   }
+
+   template <typename TCurrentOp>
+   static constexpr void ExecuteNextOp(std::span<T, TotalVecSize<TDims...>()> matrixValues,
+      TCurrentOp&& currentOp, size_t flatIndex, auto... indices)
+   {
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+   }
+
+   template <typename TCurrentOp, typename... TRemainingOps>
    static constexpr auto ReturnLastOp(TCurrentOp&& currentOp, TRemainingOps&&... remainingOps)
    {
       return ReturnLastOp(remainingOps...);
    }
 
-   template <typename TCurrentOp>
-   static constexpr auto ReturnLastOp(TCurrentOp&& currentOp)
+   template <typename TCurrentOp> static constexpr auto ReturnLastOp(TCurrentOp&& currentOp)
    {
       if constexpr (MatrixFuncExHasResult<TCurrentOp>)
       {
