@@ -85,9 +85,9 @@ public:
     * 1. [](const T& out, const T& input, size_t flatIndex)
     * 1. [](const T& out, const T& input, size_t... NIndices)
     */
-   template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
+   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
    {
-      MatrixFuncExecutor::Run(*this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
+      return MatrixFuncExecutor::Run(*this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
    }
 
    /**
@@ -445,9 +445,9 @@ public:
     * 1. [](const T& out, const T& input, size_t flatIndex)
     * 1. [](const T& out, const T& input, size_t... NIndices)
     */
-   template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
+   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
    {
-      MatrixFuncExecutor::Run(*this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
+      return MatrixFuncExecutor::Run(*this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
    }
 
    /**
@@ -460,9 +460,9 @@ public:
     * 1. [](const T& out, const T& input, size_t flatIndex)
     * 1. [](const T& out, const T& input, size_t... NIndices)
     */
-   template <typename TFunc> void Map(TFunc&& mapper)
+   template <typename TFunc> MatrixState<TAlloc, T, TDims...>& Map(TFunc&& mapper)
    {
-      MatrixFuncExecutor::Run(*this, MapEx(*this, std::forward<TFunc>(mapper)));
+      return MatrixFuncExecutor::Run(*this, MapEx(*this, std::forward<TFunc>(mapper)));
    }
 
 private:

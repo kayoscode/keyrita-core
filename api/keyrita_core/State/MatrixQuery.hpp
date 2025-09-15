@@ -577,7 +577,7 @@ private:
    }
 
    template <typename TCurrentOp, typename... TRemainingOps>
-   static constexpr auto ReturnLastOp(TCurrentOp&& currentOp, TRemainingOps&&... remainingOps)
+   static constexpr decltype(auto) ReturnLastOp(TCurrentOp&& currentOp, TRemainingOps&&... remainingOps)
    {
       return ReturnLastOp(remainingOps...);
    }
