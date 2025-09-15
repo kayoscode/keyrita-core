@@ -95,8 +95,8 @@ concept MatrixFuncExHasResult = requires(TExec& exec) {
 // Determines if a matrix result has the same type as given TResult (usually the input.)
 template <typename TResult, typename TExec>
 concept MatrixFuncHasSameResult = requires(TExec& exec) {
-      { exec.GetResult() } -> std::convertible_to<TResult>;
-   };
+   { exec.GetResult() } -> std::convertible_to<TResult>;
+};
 
 /**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
@@ -105,8 +105,9 @@ concept MatrixFuncHasSameResult = requires(TExec& exec) {
  * @tparam     TTotalSize  The flat size of the matrix
  * @tparam     TDims...    The list of dimensions and sizes known at compile time.
  */
-template <size_t... TDims> struct MatrixStaticWalker
+template <size_t... TDims> class MatrixStaticWalker
 {
+public:
    /**
     * @brief      Implements the walk operation keeping track of indices for each dimension.
     * Useful for iterating over a single slice.
@@ -433,6 +434,7 @@ concept ValidMapTarget = requires(TMatrix& matrix, size_t flatIdx) {
       matrix.GetRef(flatIdx)
    } -> std::same_as<std::add_lvalue_reference_t<typename TMatrix::value_type>>;
 };
+// TODO ensure correct size
 
 template <typename TMatrix, typename TFunc>
    requires ValidMapTarget<TMatrix>
@@ -466,7 +468,8 @@ private:
    }
 
    template <typename T, typename... TIdx>
-      requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&, size_t> && (sizeof...(TIdx) > 1)
+      requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&, size_t> &&
+               (sizeof...(TIdx) > 1)
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
       mFunc(mResultMatrix.GetRef(flatIndex), value, flatIndex);
@@ -490,7 +493,7 @@ concept WalkableMatrix = requires(const std::remove_pointer_t<TMatrix>& matrix) 
    };
 };
 
-template <size_t... TDims> class MatrixFuncExecutor
+class MatrixFuncExecutor
 {
 public:
    /**
@@ -506,11 +509,10 @@ public:
       requires WalkableMatrix<TMatrix>
    static constexpr auto Run(TMatrix& matrix, TFuncEx&& ex)
    {
-      MatrixStaticWalker<TDims...>::Walk(
-         [&matrix, &ex](size_t flatIdx, auto&&... indices)
+      auto matrixValues = matrix.GetValues();
+      TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
+         [&matrixValues, &ex](size_t flatIdx, auto&&... indices)
          {
-            auto matrixValues = matrix.GetValues();
-
             // Return the result to see if it should be canceled.
             return ex.Impl(matrixValues[flatIdx], flatIdx, indices...);
          });
@@ -534,14 +536,15 @@ public:
  * The actions are executed one after another in a single loop, All results must be computed
  * based on the assumption that none of the other values in the matrix have been mutated yet.
  */
-template <ScalarStateValue T, size_t... TDims> class MatrixOpsExecutor
+class MatrixOpsExecutor
 {
 public:
-   template <typename... TOps>
-   static constexpr auto Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOps&&... ops)
+   template <typename TMatrix, typename... TOps>
+   static constexpr auto Run(TMatrix& matrix, TOps&&... ops)
    {
-      MatrixStaticWalker<TDims...>::Walk(
-         [matrixValues, &ops...](size_t flatIdx, auto&&... indices) -> void
+      auto matrixValues = matrix.GetValues();
+      TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
+         [&matrixValues, &ops...](size_t flatIdx, auto&&... indices) -> void
          {
             // Recursively execute every op in order. This is all compile time.
             ExecuteNextOp<TOps...>(matrixValues, std::forward<TOps>(ops)..., flatIdx, indices...);
@@ -551,36 +554,9 @@ public:
    }
 
 private:
-   template <typename TOp, typename... TNextOps>
-   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOp&& currentOp, TNextOps&&... nextOps, size_t flatIndex, auto... indices)
-   {
-      // First, call the current op.
-      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
-
-      // At this point, we can see if the result of the last op in the chain was the same type as the input.
-      // If so, feed it forward into the remaining ops.
-      if constexpr (MatrixFuncHasSameResult<decltype(matrixValues), TOp>)
-      {
-         // Call with the input taken from the result.
-         CallNextOps<TNextOps...>(currentOp.GetResult(), std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
-      }
-      else 
-      {
-         // Call the next with the same input.
-         CallNextOps<TNextOps...>(matrixValues, std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
-      }
-   }
-
-   template <typename TOp>
-   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, 
-      TOp&& currentOp, size_t flatIndex, auto... indices)
-   {
-      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
-   }
-
    template <typename TCurrentOp, typename... TRemainingOps>
-   static constexpr void ExecuteNextOp(std::span<T, TotalVecSize<TDims...>()> matrixValues,
-      TCurrentOp&& currentOp, TRemainingOps&&... remainingOps, size_t flatIndex, auto... indices)
+   static constexpr void ExecuteNextOp(auto& matrixValues, TCurrentOp&& currentOp,
+      TRemainingOps&&... remainingOps, size_t flatIndex, auto... indices)
    {
       currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
       ExecuteNextOp<TRemainingOps...>(
@@ -588,8 +564,8 @@ private:
    }
 
    template <typename TCurrentOp>
-   static constexpr void ExecuteNextOp(std::span<T, TotalVecSize<TDims...>()> matrixValues,
-      TCurrentOp&& currentOp, size_t flatIndex, auto... indices)
+   static constexpr void ExecuteNextOp(
+      auto& matrixValues, TCurrentOp&& currentOp, size_t flatIndex, auto... indices)
    {
       currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
    }
