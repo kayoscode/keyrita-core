@@ -132,16 +132,8 @@ public:
 private:
    template <typename TFunc, size_t TCurrentDimIdx, size_t TFirstDim, size_t... TRemainingDims>
    static constexpr bool WalkImpl(
-      TFunc&& func, std::array<size_t, sizeof...(TDims)>& indices, size_t flatIdx = 0)
+      TFunc&& func, std::array<size_t, sizeof...(TDims)>& indices)
    {
-      // Get the stride
-      size_t flatIdxStride = 1;
-
-      if constexpr (sizeof...(TRemainingDims) > 0)
-      {
-         flatIdxStride = TotalVecSize<TRemainingDims...>();
-      }
-
       for (size_t i = 0; i < TFirstDim; i++)
       {
          indices[TCurrentDimIdx] = i;
@@ -149,7 +141,7 @@ private:
          {
             // Recursively call and generate the next dimension's index.
             if (!WalkImpl<TFunc, TCurrentDimIdx + 1, TRemainingDims...>(
-                   std::forward<TFunc>(func), indices, flatIdx))
+                   std::forward<TFunc>(func), indices))
             {
                // If our child dimension canceled, we have to cancel here too.
                return false;
@@ -160,20 +152,20 @@ private:
             bool canceled = false;
 
             std::apply(
-               [&](auto... idx)
+               [func = std::forward<TFunc>(func), &canceled](auto... idx)
                {
                   // Check for cancel if applicable.
                   if constexpr (std::is_convertible_v<
                                    std::invoke_result_t<TFunc, size_t, decltype(idx)...>, bool>)
                   {
-                     if (!func(flatIdx, idx...))
+                     if (!func(ComputeFlatIndex<TDims...>(idx...), idx...))
                      {
                         canceled = true;
                      }
                   }
                   else
                   {
-                     func(flatIdx, idx...);
+                     func(ComputeFlatIndex<TDims...>(idx...), idx...);
                   }
                },
                indices);
@@ -185,9 +177,6 @@ private:
                return false;
             }
          }
-
-         // Increase the offset by the stride to move to the next dimension.
-         flatIdx += flatIdxStride;
       }
 
       // No cancel if we iterate through normal.
