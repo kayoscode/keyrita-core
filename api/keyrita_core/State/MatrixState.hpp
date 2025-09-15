@@ -356,7 +356,7 @@ public:
     * @param      funcs   The funcs
     * @return     The result of the last expression in the list.
     */
-   template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
+   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
    {
       return MatrixOpsExecutor::Run(*this, std::forward<TFuncs>(funcs)...);
    }

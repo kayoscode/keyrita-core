@@ -255,11 +255,9 @@ public:
       }
    }
 
-   constexpr size_t GetResult()
+   size_t GetResult() const
    {
-      size_t count = mCount;
-      mCount = 0;
-      return count;
+      return mCount;
    }
 
 private:
@@ -307,7 +305,7 @@ public:
       return true;
    }
 
-   constexpr size_t GetResult()
+   size_t GetResult() const
    {
       return mResult;
    }
@@ -357,7 +355,7 @@ public:
       return true;
    }
 
-   constexpr size_t GetResult()
+   size_t GetResult() const 
    {
       return mResult;
    }
@@ -459,6 +457,14 @@ public:
       CallClient(value, flatIndex, indices...);
    }
 
+   /**
+    * @return      Returns the matrix that was writen to by ref.
+    */
+   TMatrix& GetResult() const
+   {
+      return mResultMatrix;
+   }
+
 private:
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&>
@@ -507,7 +513,7 @@ public:
     */
    template <typename TMatrix, typename TFuncEx>
       requires WalkableMatrix<TMatrix>
-   static constexpr auto Run(TMatrix& matrix, TFuncEx&& ex)
+   static constexpr decltype(auto) Run(TMatrix& matrix, TFuncEx&& ex)
    {
       auto matrixValues = matrix.GetValues();
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
@@ -540,7 +546,7 @@ class MatrixOpsExecutor
 {
 public:
    template <typename TMatrix, typename... TOps>
-   static constexpr auto Run(TMatrix& matrix, TOps&&... ops)
+   static constexpr decltype(auto) Run(TMatrix& matrix, TOps&&... ops)
    {
       auto matrixValues = matrix.GetValues();
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
@@ -576,7 +582,7 @@ private:
       return ReturnLastOp(remainingOps...);
    }
 
-   template <typename TCurrentOp> static constexpr auto ReturnLastOp(TCurrentOp&& currentOp)
+   template <typename TCurrentOp> static constexpr decltype(auto) ReturnLastOp(TCurrentOp&& currentOp)
    {
       if constexpr (MatrixFuncExHasResult<TCurrentOp>)
       {
