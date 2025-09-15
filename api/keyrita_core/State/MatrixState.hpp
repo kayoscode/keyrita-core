@@ -164,45 +164,12 @@ public:
    }
 
    /**
-    * @brief      Returns a set of requested indices for the first element in the matrix that
-    * was found which matches the predicate.
-    *
-    * @param      f      Predicate called per element. There are 3 valid formats:
-    * 1. [](const T& value) -> bool
-    * 2. [](const T& value, size_t flatIndex) -> bool
-    * 3. [](const T& value, size_t... NIndices) -> bool
-    *
-    * You may provide 0, 1, or N {where N = sizeof(dims)} for the format which to receive the found
-    * index.
-    *
-    * @return     True if any items were found, false otherwise.
-    */
-   template <typename TFunc, typename... TIdx>
-      requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
-   bool FindIf(TFunc&& predicate, TIdx&... indices) const
-   {
-      return MatrixFindIfQuery<T, TDims...>::Run(
-         GetValues(), std::forward<TFunc>(predicate), indices...);
-   }
-
-   /**
     * @brief      Returns a readonly view of the data.
     * @return     The readonly data view as a span.
     */
-   std::span<const T, TotalVecSize<TDims...>()> GetValues() const
+   std::span<const T> GetValues() const
    {
-      return *mRawData;
-   }
-
-   /**
-    * @brief      Returns a raw pointer to the underlying flat matrix values.
-    *
-    * @return     A raw pointer to the underlying data. It is considered unsafe to cast away const
-    * and modify the values.
-    */
-   const std::span<const T> GetValuesUnsized() const
-   {
-      return GetValues();
+      return mRawData;
    }
 
    /**
@@ -301,14 +268,14 @@ protected:
     * @brief      Sets the readonly memory view for this matrix. This can be changed at runtime if
     * needed.
     */
-   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()>& data)
+   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()> data)
    {
-      mRawData = &data;
+      mRawData = std::span<const T>(data);
    }
 
 private:
    // Store a pointer to the raw data here.
-   std::span<const T, TotalVecSize<TDims...>()>* mRawData;
+   std::span<const T> mRawData;
 
    // Store the flat size of the array as a const in the base class.
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();

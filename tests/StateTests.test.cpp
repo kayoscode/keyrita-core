@@ -845,110 +845,6 @@ private:
    }
 };
 
-class TestMatrixFindIf
-{
-public:
-   static void Test()
-   {
-      size_t idx;
-      size_t x, y, z;
-      bool found = false;
-
-      StaticVectorState<func_test_t, 10> vec;
-      MatrixUtils::FillSequence(vec);
-
-      // Find the first and last elements.
-      found = vec.FindIf(
-         [](func_test_t value)
-         {
-            return value == 0;
-         },
-         idx);
-      ASSERT_EQ(idx, 0);
-      ASSERT_TRUE(found);
-
-      found = vec.FindIf(
-         [&vec](func_test_t value, size_t flatIdx)
-         {
-            return value == vec.GetFlatSize() - 1;
-         },
-         idx);
-      ASSERT_EQ(idx, vec.GetFlatSize() - 1);
-      ASSERT_TRUE(found);
-
-      // Test on a matrix and test each combination of parameters.
-      HeapMatrixState<func_test_t, 10, 10, 10> matrix;
-      MatrixUtils::FillSequence(matrix);
-
-      // Find without taking in any indices.
-      found = matrix.FindIf(
-         [](func_test_t value)
-         {
-            return value == 0;
-         },
-         idx);
-      ASSERT_EQ(idx, 0);
-      ASSERT_TRUE(found);
-
-      found = matrix.FindIf(
-         [&matrix](func_test_t value)
-         {
-            return value == matrix.GetFlatSize() - 1;
-         },
-         x, y, z);
-      ASSERT_EQ(matrix.ToFlatIndex(x, y, z), matrix.GetFlatSize() - 1);
-      ASSERT_TRUE(found);
-
-      // Test taking in flat index
-      found = matrix.FindIf(
-         [&matrix](func_test_t value, size_t flatIndex)
-         {
-            return value == matrix.GetFlatSize() - 1;
-         },
-         idx);
-      ASSERT_EQ(idx, matrix.GetFlatSize() - 1);
-      ASSERT_TRUE(found);
-
-      found = matrix.FindIf(
-         [](func_test_t value, size_t flatIndex)
-         {
-            return value == 0;
-         },
-         x, y, z);
-      ASSERT_EQ(matrix.ToFlatIndex(x, y, z), 0);
-      ASSERT_TRUE(found);
-
-      // Test taking in all indices
-      found = matrix.FindIf(
-         [](func_test_t value, size_t i, size_t j, size_t k)
-         {
-            return value == 0;
-         },
-         x, y, z);
-      ASSERT_EQ(matrix.ToFlatIndex(x, y, z), 0);
-      ASSERT_TRUE(found);
-
-      found = matrix.FindIf(
-         [&matrix](func_test_t value, size_t i, size_t j, size_t k)
-         {
-            return value == matrix.GetFlatSize() - 1;
-         },
-         idx);
-      ASSERT_EQ(idx, matrix.GetFlatSize() - 1);
-      ASSERT_TRUE(found);
-
-      // Test not found.
-      found = matrix.FindIf(
-         [&matrix](func_test_t value, size_t i, size_t j, size_t k)
-         {
-            return false;
-         },
-         idx);
-      ASSERT_EQ(idx, matrix.GetFlatSize() - 1);
-      ASSERT_FALSE(found);
-   }
-};
-
 TEST(StateTests, TestMatrixQueries)
 {
    TestMatrixQueries<HeapVectorState, 10>::Test();
@@ -1004,11 +900,6 @@ TEST(StateTests, TestMatrixFold)
    TestMatrixFold<HeapMatrixState, 5, 1, 2>::Test();
    TestMatrixFold<StaticVectorState, 10>::Test();
    TestMatrixFold<StaticMatrixState, 5, 1, 2>::Test();
-}
-
-TEST(StateTests, TestMatrixFindIf)
-{
-   TestMatrixFindIf::Test();
 }
 
 TEST(StateTests, TestMatrixChainedOps)
