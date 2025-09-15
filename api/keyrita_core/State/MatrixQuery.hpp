@@ -473,7 +473,7 @@ private:
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[mResultMatrix.ToFlatIndex(indices...)], value);
+      mFunc(mData[flatIndex], value);
    }
 
    template <typename T, typename... TIdx>
@@ -481,14 +481,14 @@ private:
                (sizeof...(TIdx) > 1)
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[mResultMatrix.ToFlatIndex(indices...)], value, flatIndex);
+      mFunc(mData[flatIndex], value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, TIdx...>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[mResultMatrix.ToFlatIndex(indices...)], value, indices...);
+      mFunc(mData[flatIndex], value, indices...);
    }
 
    const std::decay_t<TFunc> mFunc;
