@@ -4,8 +4,10 @@
 
 #include <concepts>
 #include <cstddef>
-#include <iostream>
+#include <limits>
+#include <random>
 #include <span>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -538,31 +540,47 @@ public:
 };
 
 /**
- * @brief      Passes if the series of ops in the given order can be executed on a matrix.
+ * @brief Executes a sequence of operations on a walkable matrix, attempting to fuse as many
+ *        operations into a single pass over the data as possible.
  *
- * Rules:
- * 1. Each op's runner is executed in the order given. results can only be returned from the last op
- * in the list.
- * 2. Even if your op returns a bool, the operation will not be short circuited if called here.
+ * Rules and Behavior:
+ * 1. Operations are executed in the order provided. Only the last operation can produce a return
+ *    value; intermediate operations are expected to mutate in-place or return void.
+ * 2. Even if an operation returns a value (including bool), all operations are executed; there
+ *    is no short-circuiting.
+ * 3. Loop fusion is attempted: multiple operations are combined into a single traversal of the
+ *    matrix whenever possible.
+ * 4. If an operation produces a matrix of different dimensions than the current one, a new loop
+ *    is started to iterate over the new matrix.
  *
- * Unenforced rule:
- * The actions are executed one after another in a single loop, All results must be computed
- * based on the assumption that none of the other values in the matrix have been mutated yet.
+ * Pass Limit Enforcement:
+ * - The `maxPasses` parameter specifies the maximum number of passes allowed through the data.
+ * - In debug builds, an assert is triggered if the pass count exceeds `maxPasses`.
+ * - If `KC_ALWAYS_ENFORCE_PASS_LIMIT` is defined, a runtime exception is thrown in release mode
+ *   when the limit is exceeded.
+ * - By default, production code will not crash due to excess passes; this enforcement is
+ *   primarily for development and testing purposes.
+ *
+ * Notes:
+ * - All operations are assumed to work correctly regardless of the order of mutation within a
+ *   single traversal; i.e., operations must not rely on the matrix being partially updated.
+ * - The executor relies on matrix spans remaining valid for the duration of all operations.
+ * - Compile-time checks ensure that only walkable matrices and valid operations can be executed.
  */
 class MatrixOpsExecutor
 {
 public:
    template <WalkableMatrix TMatrix, typename... TOps>
-   static constexpr decltype(auto) Run(TMatrix& matrix, TOps&&... ops)
+   static constexpr decltype(auto) Run(int maxPasses, TMatrix& matrix, TOps&&... ops)
    {
-      RunImpl(matrix, [](size_t, auto...) {}, ops...);
+      RunImpl(maxPasses, matrix, [](size_t, auto...) {}, ops...);
       return ReturnLastOp(ops...);
    }
 
 private:
    template <WalkableMatrix TMatrix, typename TCurrentRunner, typename TCurrentOp, typename... TOps>
-   static constexpr void RunImpl(
-      TMatrix& matrix, TCurrentRunner&& runner, TCurrentOp&& currentOp, TOps&&... ops)
+   static constexpr void RunImpl(int& maxPasses, TMatrix& matrix, TCurrentRunner&& runner,
+      TCurrentOp&& currentOp, TOps&&... ops)
    {
       auto matrixValues = matrix.GetValues();
 
@@ -576,7 +594,7 @@ private:
       if constexpr (!MatrixFuncExHasResult<TCurrentOp>)
       {
          RunImpl(
-            matrix,
+            maxPasses, matrix,
             [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
                size_t flatIdx, auto... indices)
             {
@@ -596,7 +614,7 @@ private:
          if constexpr (TMatrix::template HasSameDims<MatrixFuncExResult<TCurrentOp>>())
          {
             RunImpl(
-               nextInput,
+               maxPasses, nextInput,
                [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
                   size_t flatIdx, auto... indices)
                {
@@ -608,10 +626,10 @@ private:
          else
          {
             // Combine the current runner into one loop by executing here.
-            ExecuteRunner(matrix, std::forward<TCurrentRunner>(runner), std::forward<TCurrentOp>(currentOp));
+            ExecuteRunner(maxPasses, matrix, std::forward<TCurrentRunner>(runner), std::forward<TCurrentOp>(currentOp));
 
             // Start a new loop by creating a new runner and continue with the remaining ops.
-            RunImpl(nextInput, [](size_t, auto...){});
+            RunImpl(maxPasses, nextInput, [](size_t, auto...) {}, ops...);
          }
       }
       else
@@ -622,29 +640,39 @@ private:
    }
 
    template <WalkableMatrix TMatrix, typename TCurrentRunner, typename TCurrentOp>
-   static constexpr void RunImpl(TMatrix& matrix, TCurrentRunner&& runner, TCurrentOp&& currentOp)
+   static constexpr void RunImpl(
+      int& maxPasses, TMatrix& matrix, TCurrentRunner&& runner, TCurrentOp&& currentOp)
    {
       // No matter what, if there's nothing left, walk the matrix using the runner.
       auto matrixValues = matrix.GetValues();
-      ExecuteRunner(
-         matrix, [&matrixValues, runner = std::forward<TCurrentRunner>(runner), &currentOp](size_t flatIdx, auto&&... indices)
-         {
-            runner(flatIdx, indices...);
-            currentOp.Impl(matrixValues[flatIdx], flatIdx, indices...);
-         });
+      ExecuteRunner(maxPasses, matrix, std::forward<TCurrentRunner>(runner),
+         std::forward<TCurrentOp>(currentOp));
    }
 
-   template <typename TMatrix, typename TRunner>
-   static constexpr void ExecuteRunner(TMatrix& matrix, TRunner&& runner)
+   template <typename TMatrix, typename TRunner, typename TCurrentOp>
+   static constexpr void ExecuteRunner(
+      int& maxPasses, TMatrix& matrix, TRunner&& runner, TCurrentOp&& currentOp)
    {
+      assert(maxPasses > 0 && "Number of passes through the data exceeded max.");
+
+#if defined(NDEBUG)
+      if (maxPasses <= 0)
+      {
+         throw std::runtime_error("Number of passes through the data exceeded the max.");
+      }
+#endif
+
+      maxPasses--;
+
       auto matrixValues = matrix.GetValues();
 
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
-         [&matrixValues, runner = std::forward<TRunner>(runner)](
+         [&matrixValues, runner = std::forward<TRunner>(runner), &currentOp](
             size_t flatIdx, auto&&... indices) -> void
          {
             // Call all the runners setup in the op chain.
             runner(flatIdx, indices...);
+            currentOp.Impl(matrixValues[flatIdx], flatIdx, indices...);
          });
    }
 

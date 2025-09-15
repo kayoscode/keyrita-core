@@ -3,6 +3,7 @@
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/StateBase.hpp"
+#include <limits>
 #include <type_traits>
 
 namespace kc
@@ -233,7 +234,7 @@ public:
    /**
     * @return     True if all the dimensions are the same, false otherwise.
     */
-   template <typename TMatrix> constexpr static bool HasSameDims() 
+   template <typename TMatrix> constexpr static bool HasSameDims()
    {
       return std::remove_cvref_t<TMatrix>::template ApplyDims<HasSameDimsChecker>::HasSameDims();
    }
@@ -309,16 +310,6 @@ public:
    }
 
    /**
-    * @return      The value at the given matrix index.
-    */
-   template <typename... TIdx>
-      requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T& operator()(TIdx... indices)
-   {
-      return mValues[this->ToFlatIndex(indices...)];
-   }
-
-   /**
     * @brief      Performs a series of operations. Attempts to condense all operations into a single
     * loop whenever possible.
     * @param      funcs   The funcs
@@ -326,7 +317,28 @@ public:
     */
    template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
    {
-      return MatrixOpsExecutor::Run(*this, std::forward<TFuncs>(funcs)...);
+      return MatrixOpsExecutor::Run(
+         std::numeric_limits<int>::max(), *this, std::forward<TFuncs>(funcs)...);
+   }
+
+   /**
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single
+    * loop whenever possible. Limits the number of passes through the data. We throw a runtime
+    * exception if more passes occur than expected.
+    *
+    * NOTE, by default, we only check this in debug mode, but if you define
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT, we will check in release mode too.
+    *
+    * Typically, we don't assume passing through the data more times than you expected to be an
+    * error since production software should work correctly either way. But the
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT override is designed for cases where it is necessary to enforce
+    * it. One example is unit testing.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
+    */
+   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs)
+   {
+      return MatrixOpsExecutor::Run(maxPasses, *this, std::forward<TFuncs>(funcs)...);
    }
 
    /**
@@ -384,6 +396,43 @@ public:
    }
 
    /**
+    * @return      Accesses the value at the given index and returns by ref.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T operator()(TIdx... indices)
+   {
+      return GetValues()[this->ToFlatIndex(indices...)];
+   }
+
+   /**
+    * @return      Accesses the value at the given index and returns by ref.
+    */
+   T operator[](size_t flatIndex)
+   {
+      return GetValues()[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   T GetValue(TIdx... indices)
+   {
+      size_t flatIndex = this->ToFlatIndex(indices...);
+      return (*this)[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index.
+    */
+   T GetValue(size_t flatIndex)
+   {
+      return (*this)[flatIndex];
+   }
+
+   /**
     * @return      Returns the value of the matrix at a given index pack by reference
     */
    template <typename... TIdx>
@@ -400,6 +449,22 @@ public:
    T& GetRef(size_t flatIndex)
    {
       return mValues[flatIndex];
+   }
+
+   /*
+    * @return     The writable kvalues.
+    */
+   std::span<const T> GetValues() const
+   {
+      return mValues;
+   }
+
+   /*
+    * @return     The writable kvalues.
+    */
+   std::span<T> GetValues()
+   {
+      return mValues;
    }
 
    /**
