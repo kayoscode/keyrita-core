@@ -158,9 +158,9 @@ public:
     * 3. [](TFoldResult& acc, const T& value, size_t... NIndices)
     */
    template <typename TFoldResult = T, typename TFunc>
-   void Fold(TFoldResult& initialValue, TFunc&& func) const
+   TFoldResult& Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFuncExecutor::Run(*this, kc::Fold(initialValue, std::forward<TFunc>(func)));
+      return MatrixFuncExecutor::Run(*this, kc::Fold(initialValue, std::forward<TFunc>(func)));
    }
 
    /**

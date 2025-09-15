@@ -92,12 +92,6 @@ concept MatrixFuncExHasResult = requires(TExec& exec) {
    { exec.GetResult() };
 } && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
 
-// Determines if a matrix result has the same type as given TResult (usually the input.)
-template <typename TResult, typename TExec>
-concept MatrixFuncHasSameResult = requires(TExec& exec) {
-   { exec.GetResult() } -> std::convertible_to<TResult>;
-};
-
 /**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
  *
@@ -397,6 +391,11 @@ public:
    inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       CallClient(value, flatIndex, indices...);
+   }
+
+   TFoldResult& GetResult()
+   {
+      return mResult;
    }
 
 private:

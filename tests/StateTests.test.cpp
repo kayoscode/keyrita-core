@@ -1,7 +1,4 @@
 #include "keyrita_core/State.hpp"
-#include "keyrita_core/State/MatrixQuery.hpp"
-#include "keyrita_core/State/MatrixState.hpp"
-#include "keyrita_core/State/MatrixUtils.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -803,7 +800,7 @@ private:
 
       // Test on generic result
       std::vector<func_test_t> foldResult;
-      matrix.Fold(foldResult,
+      foldResult = matrix.Fold(foldResult,
          [](auto& acc, func_test_t value)
          {
             acc.push_back(value);
@@ -815,12 +812,16 @@ private:
    {
       // Test on generic result
       std::vector<func_test_t> foldResult;
-      matrix.Fold(foldResult,
+      std::vector<func_test_t>& fr = matrix.Fold(foldResult,
          [](auto& acc, func_test_t value, size_t flatIdx)
          {
             acc.push_back(flatIdx);
          });
       TestFoldResult(foldResult);
+      TestFoldResult(fr);
+
+      // Make sure a copy didn't happen
+      ASSERT_EQ(&foldResult, &fr);
    }
 
    template <size_t... TIdx>
