@@ -3,52 +3,22 @@
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/StateBase.hpp"
+#include <limits>
+#include <type_traits>
 
 namespace kc
 {
 /**
- * @brief      Class representing a read only view of a matrix state object
- *
- * @tparam     T      The type stored in the matrix.
- * @tparam     TDims  The original dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class IMatrixView
-{
-public:
-   using value_type = T;
-
-   /**
-    * @brief      Standard constructor
-    * @param[in]  rawData  A raw pointer to readonly memory over which this view will operate.
-    */
-   IMatrixView(const std::span<const T, TotalVecSize<TDims...>()> rawData) : mRawMatrix(rawData)
-   {
-   }
-
-private:
-   std::span<const T, TotalVecSize<TDims...>()> mRawMatrix;
-   std::array<std::tuple<size_t, size_t>, sizeof...(TDims)> mSlice;
-};
-
-/**
- * @brief      Class representing a read/write view of a matrix state object
- *
- * @tparam     T      The type stored in the matrix.
- * @tparam     TDims  The original dimensions of the matrix.
- */
-template <ScalarStateValue T, size_t... TDims> class MatrixView : public IMatrixView<T, TDims...>
-{
-public:
-};
-
-/**
  * @brief      An abstraction on top of vector state providing utilities to handle N dimensions
  */
-template <ScalarStateValue T, size_t... TDims> class IMatrixState : public virtual IReadState
+template <ScalarStateValue T, size_t... TDims> class IMatrixState
 {
 public:
    // Accessors
    using value_type = T;
+
+   // Apply the dimensions to a type of your choosing.
+   template <template <size_t...> typename TTarget> using ApplyDims = TTarget<TDims...>;
 
    /**
     * @return      Accesses the value at the given index and returns by ref.
@@ -76,7 +46,6 @@ public:
    T GetValue(TIdx... indices)
    {
       size_t flatIndex = ToFlatIndex(indices...);
-      assert(flatIndex < FlatSize);
       return (*this)[flatIndex];
    }
 
@@ -85,7 +54,6 @@ public:
     */
    T GetValue(size_t flatIndex)
    {
-      assert(flatIndex < FlatSize);
       return (*this)[flatIndex];
    }
 
@@ -94,20 +62,34 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   const T& GetRef(TIdx... indices)
+   const T& GetRef(TIdx... indices) const
    {
       size_t flatIndex = ToFlatIndex(indices...);
-      assert(flatIndex < FlatSize);
       return GetValues()[flatIndex];
    }
 
    /**
     * @return      Returns the value of the matrix at a given flat index by reference
     */
-   const T& GetRef(size_t flatIndex)
+   const T& GetRef(size_t flatIndex) const
    {
-      assert(flatIndex < FlatSize);
       return GetValues()[flatIndex];
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
+    * target matrix.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
+   {
+      return MatrixFuncExecutor::Run(*this, kc::Map(outMatrix, std::forward<TFunc>(mapper)));
    }
 
    /**
@@ -120,7 +102,7 @@ public:
     */
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), ForEachEx(std::forward<TFunc>(f)));
+      MatrixFuncExecutor::Run(*this, kc::ForEach(std::forward<TFunc>(f)));
    }
 
    /**
@@ -135,7 +117,7 @@ public:
     */
    template <typename TFunc> size_t CountIf(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), CountIfEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor::Run(*this, kc::CountIf(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -150,7 +132,7 @@ public:
     */
    template <typename TFunc> bool All(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), AllEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor::Run(*this, kc::All(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -165,7 +147,7 @@ public:
     */
    template <typename TFunc> bool Any(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), AnyEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor::Run(*this, kc::Any(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -178,54 +160,24 @@ public:
     * 3. [](TFoldResult& acc, const T& value, size_t... NIndices)
     */
    template <typename TFoldResult = T, typename TFunc>
-   void Fold(TFoldResult& initialValue, TFunc&& func) const
+   TFoldResult& Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), FoldEx(initialValue, std::forward<TFunc>(func)));
-   }
-
-   /**
-    * @brief      Returns a set of requested indices for the first element in the matrix that
-    * was found which matches the predicate.
-    *
-    * @param      f      Predicate called per element. There are 3 valid formats:
-    * 1. [](const T& value) -> bool
-    * 2. [](const T& value, size_t flatIndex) -> bool
-    * 3. [](const T& value, size_t... NIndices) -> bool
-    *
-    * You may provide 0, 1, or N {where N = sizeof(dims)} for the format which to receive the found
-    * index.
-    *
-    * @return     True if any items were found, false otherwise.
-    */
-   template <typename TFunc, typename... TIdx>
-      requires(sizeof...(TIdx) == sizeof...(TDims) || sizeof...(TIdx) == 1)
-   bool FindIf(TFunc&& predicate, TIdx&... indices) const
-   {
-      return MatrixFindIfQuery<T, TDims...>::Run(
-         GetValues(), std::forward<TFunc>(predicate), indices...);
+      return MatrixFuncExecutor::Run(*this, kc::Fold(initialValue, std::forward<TFunc>(func)));
    }
 
    /**
     * @brief      Returns a readonly view of the data.
     * @return     The readonly data view as a span.
     */
-   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const = 0;
-
-   /**
-    * @brief      Returns a raw pointer to the underlying flat matrix values.
-    *
-    * @return     A raw pointer to the underlying data. It is considered unsafe to cast away const
-    * and modify the values.
-    */
-   const std::span<const T> GetValuesUnsized() const
+   std::span<const T> GetValues() const
    {
-      return GetValues();
+      return mRawData;
    }
 
    /**
     * @return     The total number of dimensions available for this matrix.
     */
-   int GetNumDims() const
+   constexpr int GetNumDims() const
    {
       return sizeof...(TDims);
    }
@@ -233,7 +185,7 @@ public:
    /**
     * @return     Returns the size of the given dimension. 0 being the first specified dimension.
     */
-   size_t GetDimSize(size_t dimIndex) const
+   constexpr size_t GetDimSize(size_t dimIndex) const
    {
       if (dimIndex < GetNumDims())
       {
@@ -249,9 +201,50 @@ public:
     *
     * @return     The dim size at the given dimension
     */
-   template <size_t TDimIndex> size_t GetDimSize() const
+   template <size_t TDimIndex> size_t constexpr GetDimSize() const
    {
       return GetDimSizeImpl<TDimIndex, TDims...>();
+   }
+
+   /**
+    * @brief      Calls a lambda passing in the list of dimensions used for this matrix.
+    * @tparam     TFunc  The function that gets called with the dimensions
+    */
+   template <typename TFunc> void DimensionAction(TFunc&& func) const
+   {
+      std::forward<TFunc>(func)(TDims...);
+   }
+
+private:
+   template <size_t... TOtherDims> class HasSameDimsChecker
+   {
+   public:
+      constexpr static bool HasSameDims()
+      {
+         if constexpr (sizeof...(TDims) == (sizeof...(TOtherDims)))
+         {
+            return ((TDims == TOtherDims) && ...);
+         }
+
+         return false;
+      }
+   };
+
+public:
+   /**
+    * @return     True if all the dimensions are the same, false otherwise.
+    */
+   template <typename TMatrix> constexpr static bool HasSameDims()
+   {
+      return std::remove_cvref_t<TMatrix>::template ApplyDims<HasSameDimsChecker>::HasSameDims();
+   }
+
+   /**
+    * @return     True if the dims match the dims passed in the parameter pack.
+    */
+   template <size_t... TOtherDims> constexpr static bool HasSameDims()
+   {
+      return HasSameDimsChecker<TOtherDims...>::HasSameDims();
    }
 
    /**
@@ -259,7 +252,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   size_t ToFlatIndex(TIdx... indices) const
+   constexpr size_t ToFlatIndex(TIdx... indices) const
    {
       return ComputeFlatIndex<TDims...>(indices...);
    }
@@ -267,12 +260,25 @@ public:
    /**
     * @return     The total number of elements in this matrix.
     */
-   size_t GetFlatSize() const
+   constexpr size_t GetFlatSize() const
    {
       return FlatSize;
    }
 
+protected:
+   /**
+    * @brief      Sets the readonly memory view for this matrix. This can be changed at runtime if
+    * needed.
+    */
+   void SetReadOnlyData(std::span<const T, TotalVecSize<TDims...>()> data)
+   {
+      mRawData = std::span<const T>(data);
+   }
+
 private:
+   // Store a pointer to the raw data here.
+   std::span<const T> mRawData;
+
    // Store the flat size of the array as a const in the base class.
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
 
@@ -288,7 +294,7 @@ private:
  */
 template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t... TDims>
    requires MatrixAlloc<TAlloc, T, TotalVecSize<TDims...>()>
-class MatrixState : public virtual IMatrixState<T, TDims...>, public virtual ReadWriteState
+class MatrixState : public virtual IMatrixState<T, TDims...>
 {
 public:
    using allocator_type = TAlloc<T, TDims...>;
@@ -298,62 +304,41 @@ public:
     *
     * @param[in]  defaultScalar  The default value that initializes the matrix.
     */
-   MatrixState(const T& defaultScalar) : mDefaultScalar(defaultScalar), mValue(mAllocator.GetVec())
+   MatrixState() : mValues(mAllocator.GetVec())
    {
-      SetToDefault();
+      this->SetReadOnlyData(reinterpret_cast<std::span<const T, FlatSize>&>(mValues));
    }
 
    /**
-    * @return      The value at the given matrix index.
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single
+    * loop whenever possible.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
     */
-   template <typename... TIdx>
-      requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T& operator()(TIdx... indices)
+   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
    {
-      return mValue[this->ToFlatIndex(indices...)];
+      return MatrixOpsExecutor::Run(
+         std::numeric_limits<int>::max(), *this, std::forward<TFuncs>(funcs)...);
    }
 
    /**
-    * @return     True if at default, False otherwise.
-    */
-   virtual bool IsAtDefault() const override
-   {
-      return this->All(
-         [this](const T& value)
-         {
-            return value == mDefaultScalar;
-         });
-   }
-
-   /**
-    * @brief      Sets the current value to the default scalar for every element.
-    */
-   virtual void SetToDefault() override
-   {
-      SetValues(mDefaultScalar);
-   }
-
-   /**
-    * @brief      Iterates through each element providing a reference to allow you to assign the
-    * value. Since no new data is created, map must map an element of type T to another element of
-    * type T. If you must create new data, use fold to produce the new result, or allocate the data
-    * first, then use foreach to fill in the results.
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single
+    * loop whenever possible. Limits the number of passes through the data. We throw a runtime
+    * exception if more passes occur than expected.
     *
-    * @param      f      Function called per element. There are 3 valid formats:
-    * 1. [](const T& value)
-    * 2. [](const T& value, size_t flatIndex)
-    * 3. [](const T& value, size_t... NIndices)
+    * NOTE, by default, we only check this in debug mode, but if you define
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT, we will check in release mode too.
+    *
+    * Typically, we don't assume passing through the data more times than you expected to be an
+    * error since production software should work correctly either way. But the
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT override is designed for cases where it is necessary to enforce
+    * it. One example is unit testing.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
     */
-   template <typename TFunc> MatrixState& Map(TFunc&& mapper)
+   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(mValue, MapEx(std::forward<TFunc>(mapper)));
-      SignalValueChange();
-      return *this;
-   }
-
-   template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
-   {
-      return MatrixOps<T, TDims...>::Run(mValue, std::forward<TFuncs>(funcs)...);
+      return MatrixOpsExecutor::Run(maxPasses, *this, std::forward<TFuncs>(funcs)...);
    }
 
    /**
@@ -364,9 +349,7 @@ public:
     */
    virtual void SetValue(const T& value, size_t flatIndex)
    {
-      assert(flatIndex < FlatSize);
-      mValue[flatIndex] = value;
-      SignalValueChange();
+      mValues[flatIndex] = value;
    }
 
    /**
@@ -391,18 +374,8 @@ public:
       requires MatrixBulkAction<T, TFunc>
    MatrixState& SetValues(TFunc&& setter)
    {
-      setter(mValue, FlatSize);
-      SignalValueChange();
+      setter(mValues, FlatSize);
       return *this;
-   }
-
-   /**
-    * @brief      Returns a readonly view of the data.
-    * @return     The readonly data view as a span.
-    */
-   virtual const std::span<const T, TotalVecSize<TDims...>()> GetValues() const override
-   {
-      return mValue;
    }
 
    /**
@@ -414,20 +387,121 @@ public:
     */
    MatrixState& SetValues(const T& value)
    {
-      Map(
-         [&value](T& currentValue)
-         {
-            currentValue = value;
-         });
+      for (size_t i = 0; i < FlatSize; i++)
+      {
+         mValues[i] = value;
+      }
 
       return *this;
+   }
+
+   /**
+    * @return      Accesses the value at the given index and returns by ref.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...>
+   T operator()(TIdx... indices)
+   {
+      return GetValues()[this->ToFlatIndex(indices...)];
+   }
+
+   /**
+    * @return      Accesses the value at the given index and returns by ref.
+    */
+   T operator[](size_t flatIndex)
+   {
+      return GetValues()[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack.
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   T GetValue(TIdx... indices)
+   {
+      size_t flatIndex = this->ToFlatIndex(indices...);
+      return (*this)[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index.
+    */
+   T GetValue(size_t flatIndex)
+   {
+      return (*this)[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack by reference
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   T& GetRef(TIdx... indices)
+   {
+      size_t flatIndex = this->ToFlatIndex(indices...);
+      return mValues[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index by reference
+    */
+   T& GetRef(size_t flatIndex)
+   {
+      return mValues[flatIndex];
+   }
+
+   /*
+    * @return     The writable kvalues.
+    */
+   std::span<const T> GetValues() const
+   {
+      return mValues;
+   }
+
+   /*
+    * @return     The writable kvalues.
+    */
+   std::span<T> GetValues()
+   {
+      return mValues;
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
+    * target matrix.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
+   {
+      return MatrixFuncExecutor::Run(*this, kc::Map(outMatrix, std::forward<TFunc>(mapper)));
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. Maps to self.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TFunc> MatrixState<TAlloc, T, TDims...>& Map(TFunc&& mapper)
+   {
+      return MatrixFuncExecutor::Run(*this, kc::Map(*this, std::forward<TFunc>(mapper)));
    }
 
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
    TAlloc<T, TDims...> mAllocator;
-   std::span<T, FlatSize> mValue;
-   T mDefaultScalar;
+   std::span<T, FlatSize> mValues;
 };
 
 // Vectors
@@ -454,7 +528,8 @@ public:
  */
 template <template <typename, size_t...> class TAlloc, ScalarStateValue T, size_t TSize>
    requires MatrixAlloc<TAlloc, T, TSize>
-class VectorState : public MatrixState<TAlloc, T, TSize>, public virtual IVectorState<T, TSize>
+class VectorState : public virtual MatrixState<TAlloc, T, TSize>,
+                    public virtual IVectorState<T, TSize>
 {
 public:
    /**
@@ -462,7 +537,7 @@ public:
     *
     * @param[in]  defaultScalar  The default value for every element in the vector state.
     */
-   VectorState(const T& defaultScalar) : MatrixState<TAlloc, T, TSize>(defaultScalar)
+   VectorState() : MatrixState<TAlloc, T, TSize>()
    {
    }
 };
@@ -471,40 +546,37 @@ public:
  * Helper definitions.
  */
 template <ScalarStateValue T, size_t... TDims>
-class StaticMatrixState : public MatrixState<MatrixStaticAlloc, T, TDims...>
+class StaticMatrixState : public virtual MatrixState<MatrixStaticAlloc, T, TDims...>
 {
 public:
-   StaticMatrixState(const T& defaultScalar)
-      : MatrixState<MatrixStaticAlloc, T, TDims...>(defaultScalar)
+   StaticMatrixState() : MatrixState<MatrixStaticAlloc, T, TDims...>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t... TDims>
-class HeapMatrixState : public MatrixState<MatrixHeapAlloc, T, TDims...>
+class HeapMatrixState : public virtual MatrixState<MatrixHeapAlloc, T, TDims...>
 {
 public:
-   HeapMatrixState(const T& defaultScalar)
-      : MatrixState<MatrixHeapAlloc, T, TDims...>(defaultScalar)
+   HeapMatrixState() : MatrixState<MatrixHeapAlloc, T, TDims...>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t TSize>
-class StaticVectorState : public VectorState<MatrixStaticAlloc, T, TSize>
+class StaticVectorState : public virtual VectorState<MatrixStaticAlloc, T, TSize>
 {
 public:
-   StaticVectorState(const T& defaultScalar)
-      : VectorState<MatrixStaticAlloc, T, TSize>(defaultScalar)
+   StaticVectorState() : VectorState<MatrixStaticAlloc, T, TSize>()
    {
    }
 };
 
 template <ScalarStateValue T, size_t TSize>
-class HeapVectorState : public VectorState<MatrixHeapAlloc, T, TSize>
+class HeapVectorState : public virtual VectorState<MatrixHeapAlloc, T, TSize>
 {
 public:
-   HeapVectorState(const T& defaultScalar) : VectorState<MatrixHeapAlloc, T, TSize>(defaultScalar)
+   HeapVectorState() : VectorState<MatrixHeapAlloc, T, TSize>()
    {
    }
 };

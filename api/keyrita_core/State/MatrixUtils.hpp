@@ -45,10 +45,12 @@ template <typename TMatrix, typename T = TMatrix::value_type> void Clear(TMatrix
  */
 template <typename TMatrix> void FillSequence(TMatrix& matrix)
 {
-   matrix.Map(
-      [](auto& value, size_t flatIndex)
+   matrix.SetValues([](auto values, size_t flatSize)
       {
-         value = flatIndex;
+         for(size_t i = 0; i < flatSize; i++)
+         {
+            values[i] = i;
+         }
       });
 }
 
