@@ -1,5 +1,6 @@
 #include "keyrita_core/State.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
+#include "keyrita_core/State/MatrixState.hpp"
 #include "keyrita_core/State/MatrixUtils.hpp"
 
 #include <cmath>
@@ -1104,6 +1105,30 @@ TEST(StateTests, TestIndexConversions)
 
    ASSERT_EQ((ComputeFlatIndex<5, 2, 2>(3, 0, 2)), 14);
    ASSERT_EQ((ComputeFlatIndex<2, 5, 9>(2, 2, 2)), 110);
+}
+
+TEST(StateTests, TestSameDims)
+{
+   HeapMatrixState<bool, 10, 10, 10> a;
+   ASSERT_TRUE((a.HasSameDims<10, 10, 10>()));
+   ASSERT_FALSE((a.HasSameDims<9, 10, 10>()));
+   ASSERT_FALSE((a.HasSameDims<10, 9, 10>()));
+   ASSERT_FALSE((a.HasSameDims<10, 10, 9>()));
+   ASSERT_FALSE((a.HasSameDims<10, 10>()));
+   ASSERT_FALSE((a.HasSameDims<10>()));
+   ASSERT_FALSE((a.HasSameDims<1, 1, 1>()));
+
+   HeapMatrixState<double, 10, 10, 10> b;
+   ASSERT_TRUE(a.HasSameDims(b));
+
+   HeapMatrixState<double, 9, 10, 10> c;
+   ASSERT_FALSE(a.HasSameDims(c));
+
+   HeapMatrixState<double, 10, 10> d;
+   ASSERT_FALSE(a.HasSameDims(d));
+
+   HeapMatrixState<double, 10> e;
+   ASSERT_FALSE(a.HasSameDims(e));
 }
 
 int main(int argc, char** argv)

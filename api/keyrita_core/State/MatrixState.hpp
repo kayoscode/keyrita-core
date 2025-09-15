@@ -238,6 +238,47 @@ public:
    }
 
    /**
+    * @brief      Calls a lambda passing in the list of dimensions used for this matrix.
+    * @tparam     TFunc  The function that gets called with the dimensions
+    */
+   template <typename TFunc> void DimensionAction(TFunc&& func) const
+   {
+      std::forward<TFunc>(func)(TDims...);
+   }
+
+private:
+   template <size_t... TOtherDims> class HasSameDimsChecker
+   {
+   public:
+      constexpr static bool HasSameDims()
+      {
+         if constexpr (sizeof...(TDims) == (sizeof...(TOtherDims)))
+         {
+            return ((TDims == TOtherDims) && ...);
+         }
+
+         return false;
+      }
+   };
+
+public:
+   /**
+    * @return     True if all the dimensions are the same, false otherwise.
+    */
+   template <typename TMatrix> constexpr bool HasSameDims(const TMatrix& other) const
+   {
+      return TMatrix::template ApplyDims<HasSameDimsChecker>::HasSameDims();
+   }
+
+   /**
+    * @return     True if the dims match the dims passed in the parameter pack.
+    */
+   template <size_t... TOtherDims> constexpr bool HasSameDims() const
+   {
+      return HasSameDimsChecker<TOtherDims...>::HasSameDims();
+   }
+
+   /**
     * @return     Computes the flat index equivalent of the passed index pack.
     */
    template <typename... TIdx>
@@ -253,15 +294,6 @@ public:
    constexpr size_t GetFlatSize() const
    {
       return FlatSize;
-   }
-
-   /**
-    * @brief      Calls a lambda passing in the list of dimensions used for this matrix.
-    * @tparam     TFunc  The function that gets called with the dimensions
-    */
-   template <typename TFunc> void DimensionAction(TFunc&& func) const
-   {
-      std::forward<TFunc>(func)(TDims...);
    }
 
 protected:
