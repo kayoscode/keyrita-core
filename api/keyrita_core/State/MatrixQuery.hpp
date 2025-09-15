@@ -492,10 +492,12 @@ private:
 };
 
 template <typename TMatrix>
-concept WalkableMatrix = requires(const std::remove_pointer_t<TMatrix>& matrix) {
-   {
-      matrix.DimensionAction([](auto...) {})
-   };
+concept WalkableMatrix = requires(const TMatrix& matrix) {
+   // Make sure there's a method to get access to a readonly span of data.
+   { matrix.GetValues() } -> std::convertible_to<std::span<const typename TMatrix::value_type>>;
+
+   // Make sure there's a method to check if another matrix has the same dimensions as itself.
+   { matrix.HasSameDims(matrix) } -> std::same_as<bool>;
 };
 
 class MatrixFuncExecutor
@@ -510,8 +512,7 @@ public:
     * @tparam     TFuncEx       Expected to have a member of type void Impl(const T& value, size_t
     * flatIndex, TIdx... indices)
     */
-   template <typename TMatrix, typename TFuncEx>
-      requires WalkableMatrix<TMatrix>
+   template <WalkableMatrix TMatrix, typename TFuncEx>
    static constexpr decltype(auto) Run(TMatrix& matrix, TFuncEx&& ex)
    {
       auto matrixValues = matrix.GetValues();
@@ -544,7 +545,7 @@ public:
 class MatrixOpsExecutor
 {
 public:
-   template <typename TMatrix, typename... TOps>
+   template <WalkableMatrix TMatrix, typename... TOps>
    static constexpr decltype(auto) Run(TMatrix& matrix, TOps&&... ops)
    {
       auto matrixValues = matrix.GetValues();
