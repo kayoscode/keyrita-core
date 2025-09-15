@@ -194,13 +194,13 @@ private:
    }
 };
 
-template <typename TFunc> class ForEachEx
+template <typename TFunc> class ForEach
 {
 public:
    /**
     * @brief      Constructor: Create or inject state here.
     */
-   ForEachEx(TFunc&& func) : mFunc(std::forward<TFunc>(func))
+   ForEach(TFunc&& func) : mFunc(std::forward<TFunc>(func))
    {
    }
 
@@ -239,10 +239,10 @@ private:
    const std::decay_t<TFunc> mFunc;
 };
 
-template <typename TFunc> class CountIfEx
+template <typename TFunc> class CountIf
 {
 public:
-   CountIfEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mCount(0)
+   CountIf(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mCount(0)
    {
    }
 
@@ -286,10 +286,10 @@ private:
    size_t mCount;
 };
 
-template <typename TFunc> class AllEx
+template <typename TFunc> class All
 {
 public:
-   AllEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(true)
+   All(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(true)
    {
    }
 
@@ -336,10 +336,10 @@ private:
    bool mResult;
 };
 
-template <typename TFunc> class AnyEx
+template <typename TFunc> class Any
 {
 public:
-   AnyEx(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(false)
+   Any(TFunc&& pred) : mPred(std::forward<TFunc>(pred)), mResult(false)
    {
    }
 
@@ -386,10 +386,10 @@ private:
    bool mResult;
 };
 
-template <typename TFoldResult, typename TFunc> class FoldEx
+template <typename TFoldResult, typename TFunc> class Fold
 {
 public:
-   FoldEx(TFoldResult& result, TFunc&& pred) : mFunc(std::forward<TFunc>(pred)), mResult(result)
+   Fold(TFoldResult& result, TFunc&& pred) : mFunc(std::forward<TFunc>(pred)), mResult(result)
    {
    }
 
@@ -436,13 +436,13 @@ concept ValidMapTarget = requires(TMatrix& matrix, size_t flatIdx) {
 
 template <typename TMatrix, typename TFunc>
    requires ValidMapTarget<TMatrix>
-class MapEx
+class Map
 {
 public:
    /**
     * @brief      Constructor: Create or inject state here.
     */
-   MapEx(TMatrix& resultMatrix, TFunc&& func)
+   Map(TMatrix& resultMatrix, TFunc&& func)
       : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix)
    {
    }

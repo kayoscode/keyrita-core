@@ -907,7 +907,7 @@ TEST(StateTests, TestMatrixChainedOps)
    HeapMatrixState<int, 10, 10> matrix;
 
    // Test one op.
-   matrix.Ops(MapEx(matrix,
+   matrix.Ops(Map(matrix,
       [](int& value, int, size_t flatSize)
       {
          value = flatSize;
@@ -920,13 +920,13 @@ TEST(StateTests, TestMatrixChainedOps)
       }));
 
    // Test our all operaiton inside ops.
-   ASSERT_TRUE(matrix.Ops(AllEx(
+   ASSERT_TRUE(matrix.Ops(All(
       [](int value, size_t flatIdx)
       {
          return value == flatIdx;
       })));
 
-   ASSERT_FALSE(matrix.Ops(AnyEx(
+   ASSERT_FALSE(matrix.Ops(Any(
       [](int value, size_t flatIdx)
       {
          return value != flatIdx;
@@ -934,17 +934,17 @@ TEST(StateTests, TestMatrixChainedOps)
 
    // Test a map and sum followed by a query.
    size_t sum = 0;
-   bool result = matrix.Ops(MapEx(matrix,
+   bool result = matrix.Ops(Map(matrix,
                                [&matrix](int& value, int, size_t x, size_t y)
                                {
                                   value = matrix.ToFlatIndex(x, y);
                                }),
-      FoldEx(sum,
+      Fold(sum,
          [](size_t& sum, int value)
          {
             sum += value;
          }),
-      AllEx(
+      All(
          [](int value)
          {
             return true;
@@ -954,17 +954,17 @@ TEST(StateTests, TestMatrixChainedOps)
    ASSERT_TRUE(result);
 
    sum = 0;
-   result = matrix.Ops(MapEx(matrix,
+   result = matrix.Ops(Map(matrix,
                           [&matrix](int& value, int, size_t x, size_t y)
                           {
                              value = matrix.ToFlatIndex(x, y);
                           }),
-      FoldEx(sum,
+      Fold(sum,
          [](size_t& sum, int value)
          {
             sum += value;
          }),
-      AnyEx(
+      Any(
          [](int value)
          {
             return false;
