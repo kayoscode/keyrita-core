@@ -229,7 +229,7 @@ private:
       mFunc(value, indices...);
    }
 
-   const TFunc mFunc;
+   const std::decay_t<TFunc> mFunc;
 };
 
 template <typename TFunc> class CountIfEx
@@ -277,7 +277,7 @@ private:
       return mPred(value, indices...);
    }
 
-   const TFunc mPred;
+   const std::decay_t<TFunc> mPred;
    size_t mCount;
 };
 
@@ -327,7 +327,7 @@ private:
       return mPred(value, indices...);
    }
 
-   const TFunc mPred;
+   const std::decay_t<TFunc> mPred;
    bool mResult;
 };
 
@@ -377,7 +377,7 @@ private:
       return mPred(value, indices...);
    }
 
-   const TFunc mPred;
+   const std::decay_t<TFunc> mPred;
    bool mResult;
 };
 
@@ -416,17 +416,28 @@ private:
       mFunc(mResult, value, indices...);
    }
 
-   const TFunc mFunc;
+   const std::decay_t<TFunc> mFunc;
    TFoldResult& mResult;
 };
 
-template <typename TFunc> class MapEx
+template <typename TMatrix>
+concept ValidMapTarget = requires(TMatrix& matrix, size_t flatIdx) {
+   // Only valid if it has a method that returns a mutable reference
+   {
+      matrix.GetRef(flatIdx)
+   } -> std::same_as<std::add_lvalue_reference_t<typename TMatrix::value_type>>;
+};
+
+template <typename TMatrix, typename TFunc>
+   requires ValidMapTarget<TMatrix>
+class MapEx
 {
 public:
    /**
     * @brief      Constructor: Create or inject state here.
     */
-   MapEx(TFunc&& func) : mFunc(std::forward<TFunc>(func))
+   MapEx(TMatrix& resultMatrix, TFunc&& func)
+      : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix)
    {
    }
 
@@ -435,34 +446,42 @@ public:
     * Pass along to the client and do whatever you need with the result.
     */
    template <typename T, typename... TIdx>
-   inline constexpr void Impl(T& value, size_t flatIndex, TIdx... indices)
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
    {
       CallClient(value, flatIndex, indices...);
    }
 
 private:
    template <typename T, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&>
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(value);
+      mFunc(mResultMatrix.GetRef(flatIndex), value);
    }
 
    template <typename T, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, size_t> && (sizeof...(TIdx) > 1)
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&, size_t> && (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(value, flatIndex);
+      mFunc(mResultMatrix.GetRef(flatIndex), value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
-      requires std::is_invocable_v<TFunc, T&, TIdx...>
-   constexpr void CallClient(T& value, size_t flatIndex, TIdx... indices)
+      requires std::is_invocable_v<TFunc, typename TMatrix::value_type&, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(value, indices...);
+      mFunc(mResultMatrix.GetRef(flatIndex), value, indices...);
    }
 
-   const TFunc mFunc;
+   const std::decay_t<TFunc> mFunc;
+   TMatrix& mResultMatrix;
+};
+
+template <typename TMatrix>
+concept WalkableMatrix = requires(const std::remove_pointer_t<TMatrix>& matrix) {
+   {
+      matrix.DimensionAction([](auto...) {})
+   };
 };
 
 template <typename T, size_t... TDims> class MatrixFuncExecutor
@@ -477,12 +496,15 @@ public:
     * @tparam     TFuncEx       Expected to have a member of type void Impl(const T& value, size_t
     * flatIndex, TIdx... indices)
     */
-   template <typename TFuncEx>
-   static constexpr auto Run(std::span<T, TotalVecSize<TDims...>()> matrixValues, TFuncEx&& ex)
+   template <typename TMatrix, typename TFuncEx>
+      requires WalkableMatrix<TMatrix>
+   static constexpr auto Run(TMatrix& matrix, TFuncEx&& ex)
    {
       MatrixStaticWalker<TDims...>::Walk(
-         [matrixValues, &ex](size_t flatIdx, auto&&... indices)
+         [&matrix, &ex](size_t flatIdx, auto&&... indices)
          {
+            auto matrixValues = matrix.GetValues();
+
             // Return the result to see if it should be canceled.
             return ex.Impl(matrixValues[flatIdx], flatIdx, indices...);
          });
@@ -506,7 +528,7 @@ public:
  * The actions are executed one after another in a single loop, All results must be computed
  * based on the assumption that none of the other values in the matrix have been mutated yet.
  */
-template <ScalarStateValue T, size_t... TDims> class MatrixOps
+template <ScalarStateValue T, size_t... TDims> class MatrixOpsExecutor
 {
 public:
    template <typename... TOps>
@@ -528,7 +550,8 @@ private:
       TCurrentOp&& currentOp, TRemainingOps&&... remainingOps, size_t flatIndex, auto... indices)
    {
       currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
-      ExecuteNextOp<TRemainingOps...>(matrixValues, std::forward<TRemainingOps>(remainingOps)..., flatIndex, indices...);
+      ExecuteNextOp<TRemainingOps...>(
+         matrixValues, std::forward<TRemainingOps>(remainingOps)..., flatIndex, indices...);
    }
 
    template <typename TCurrentOp>

@@ -41,7 +41,6 @@ public:
    T GetValue(TIdx... indices)
    {
       size_t flatIndex = ToFlatIndex(indices...);
-      assert(flatIndex < FlatSize);
       return (*this)[flatIndex];
    }
 
@@ -50,7 +49,6 @@ public:
     */
    T GetValue(size_t flatIndex)
    {
-      assert(flatIndex < FlatSize);
       return (*this)[flatIndex];
    }
 
@@ -59,20 +57,35 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   const T& GetRef(TIdx... indices)
+   const T& GetRef(TIdx... indices) const
    {
       size_t flatIndex = ToFlatIndex(indices...);
-      assert(flatIndex < FlatSize);
       return GetValues()[flatIndex];
    }
 
    /**
     * @return      Returns the value of the matrix at a given flat index by reference
     */
-   const T& GetRef(size_t flatIndex)
+   const T& GetRef(size_t flatIndex) const
    {
-      assert(flatIndex < FlatSize);
       return GetValues()[flatIndex];
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
+    * target matrix.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
+   {
+      MatrixFuncExecutor<T, TDims...>::Run(
+         *this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
    }
 
    /**
@@ -85,7 +98,7 @@ public:
     */
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(GetValues(), ForEachEx(std::forward<TFunc>(f)));
+      MatrixFuncExecutor<const T, TDims...>::Run(*this, ForEachEx(std::forward<TFunc>(f)));
    }
 
    /**
@@ -101,7 +114,7 @@ public:
    template <typename TFunc> size_t CountIf(TFunc&& pred) const
    {
       return MatrixFuncExecutor<const T, TDims...>::Run(
-         GetValues(), CountIfEx(std::forward<TFunc>(pred)));
+         *this, CountIfEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -116,8 +129,7 @@ public:
     */
    template <typename TFunc> bool All(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(
-         GetValues(), AllEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<const T, TDims...>::Run(*this, AllEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -132,8 +144,7 @@ public:
     */
    template <typename TFunc> bool Any(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(
-         GetValues(), AnyEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<const T, TDims...>::Run(*this, AnyEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -149,7 +160,7 @@ public:
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
       MatrixFuncExecutor<const T, TDims...>::Run(
-         GetValues(), FoldEx(initialValue, std::forward<TFunc>(func)));
+         *this, FoldEx(initialValue, std::forward<TFunc>(func)));
    }
 
    /**
@@ -244,6 +255,15 @@ public:
       return FlatSize;
    }
 
+   /**
+    * @brief      Calls a lambda passing in the list of dimensions used for this matrix.
+    * @tparam     TFunc  The function that gets called with the dimensions
+    */
+   template <typename TFunc> void DimensionAction(TFunc&& func) const
+   {
+      std::forward<TFunc>(func)(TDims...);
+   }
+
 protected:
    /**
     * @brief      Sets the readonly memory view for this matrix. This can be changed at runtime if
@@ -299,25 +319,14 @@ public:
    }
 
    /**
-    * @brief      Iterates through each element providing a reference to allow you to assign the
-    * value. Since no new data is created, map must map an element of type T to another element of
-    * type T. If you must create new data, use fold to produce the new result, or allocate the data
-    * first, then use foreach to fill in the results.
-    *
-    * @param      f      Function called per element. There are 3 valid formats:
-    * 1. [](const T& value)
-    * 2. [](const T& value, size_t flatIndex)
-    * 3. [](const T& value, size_t... NIndices)
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single loop
+    * whenever possible.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
     */
-   template <typename TFunc> MatrixState& Map(TFunc&& mapper)
-   {
-      MatrixFuncExecutor<T, TDims...>::Run(mValues, MapEx(std::forward<TFunc>(mapper)));
-      return *this;
-   }
-
    template <typename... TFuncs> auto Ops(TFuncs&&... funcs)
    {
-      return MatrixOps<T, TDims...>::Run(mValues, std::forward<TFuncs>(funcs)...);
+      return MatrixOpsExecutor<T, TDims...>::Run(mValues, std::forward<TFuncs>(funcs)...);
    }
 
    /**
@@ -328,7 +337,6 @@ public:
     */
    virtual void SetValue(const T& value, size_t flatIndex)
    {
-      assert(flatIndex < FlatSize);
       mValues[flatIndex] = value;
    }
 
@@ -367,13 +375,64 @@ public:
     */
    MatrixState& SetValues(const T& value)
    {
-      Map(
-         [&value](T& currentValue)
-         {
-            currentValue = value;
-         });
+      for (size_t i = 0; i < FlatSize; i++)
+      {
+         mValues[i] = value;
+      }
 
       return *this;
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given index pack by reference
+    */
+   template <typename... TIdx>
+      requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
+   T& GetRef(TIdx... indices)
+   {
+      size_t flatIndex = this->ToFlatIndex(indices...);
+      return mValues[flatIndex];
+   }
+
+   /**
+    * @return      Returns the value of the matrix at a given flat index by reference
+    */
+   T& GetRef(size_t flatIndex)
+   {
+      return mValues[flatIndex];
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
+    * target matrix.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
+   {
+      MatrixFuncExecutor<T, TDims...>::Run(
+         *this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. Maps to self.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](const T& out, const T& input)
+    * 1. [](const T& out, const T& input, size_t flatIndex)
+    * 1. [](const T& out, const T& input, size_t... NIndices)
+    */
+   template <typename TFunc> void Map(TFunc&& mapper)
+   {
+      MatrixFuncExecutor<T, TDims...>::Run(
+         *this, MapEx(*this, std::forward<TFunc>(mapper)));
    }
 
 private:

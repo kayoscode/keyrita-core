@@ -180,20 +180,20 @@ TEST(StateTests, GeneralVectorStateTests)
 
    // Check a few of the functional things
    vec.Map(
-         [](int& value, size_t index)
-         {
-            value = index + 1;
-         })
-      .Map(
-         [](int& value)
-         {
-            value *= 2;
-         })
-      .ForEach(
-         [](int value, size_t index)
-         {
-            ASSERT_EQ(value, (index + 1) * 2);
-         });
+      [](int& value, int, size_t index)
+      {
+         value = index + 1;
+      });
+   vec.Map(
+      [](int& value, int)
+      {
+         value *= 2;
+      });
+   vec.ForEach(
+      [](int value, size_t index)
+      {
+         ASSERT_EQ(value, (index + 1) * 2);
+      });
 
    vec.SetValues(
       [](std::span<int> values, size_t count)
@@ -306,7 +306,7 @@ private:
    constexpr static void TestNoArg(mat_t& matrix)
    {
       matrix.Map(
-         [](func_test_t& value)
+         [](func_test_t& value, func_test_t)
          {
             value = 1;
          });
@@ -316,17 +316,16 @@ private:
       MatrixUtils::FillSequence(matrix);
       ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
 
-      matrix
-         .Map(
-            [](func_test_t& value)
-            {
-               value += 1;
-            })
-         .Map(
-            [](func_test_t& value)
-            {
-               value *= 2;
-            });
+      matrix.Map(
+         [](func_test_t& value, func_test_t)
+         {
+            value += 1;
+         });
+      matrix.Map(
+         [](func_test_t& value, func_test_t)
+         {
+            value *= 2;
+         });
 
       // Check that every value was correctly set.
       matrix.ForEach(
@@ -343,7 +342,7 @@ private:
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
 
       matrix.Map(
-         [](func_test_t& value, size_t flatIndex)
+         [](func_test_t& value, func_test_t, size_t flatIndex)
          {
             value = flatIndex;
          });
@@ -366,7 +365,7 @@ private:
 
       // Check that we can iterate with these indices
       matrix.Map(
-         [&matrix](func_test_t& value, TIdx... indices)
+         [&matrix](func_test_t& value, func_test_t, TIdx... indices)
          {
             value = matrix.ToFlatIndex(indices...);
          });
@@ -1002,8 +1001,8 @@ TEST(StateTests, TestMatrixChainedOps)
    HeapMatrixState<int, 10, 10> matrix;
 
    // Test one op.
-   matrix.Ops(MapEx(
-      [](int& value, size_t flatSize)
+   matrix.Ops(MapEx(matrix,
+      [](int& value, int, size_t flatSize)
       {
          value = flatSize;
       }));
@@ -1029,8 +1028,8 @@ TEST(StateTests, TestMatrixChainedOps)
 
    // Test a map and sum followed by a query.
    size_t sum = 0;
-   bool result = matrix.Ops(MapEx(
-                               [&matrix](int& value, size_t x, size_t y)
+   bool result = matrix.Ops(MapEx(matrix,
+                               [&matrix](int& value, int, size_t x, size_t y)
                                {
                                   value = matrix.ToFlatIndex(x, y);
                                }),
@@ -1049,11 +1048,11 @@ TEST(StateTests, TestMatrixChainedOps)
    ASSERT_TRUE(result);
 
    sum = 0;
-   result = matrix.Ops(MapEx(
-                               [&matrix](int& value, size_t x, size_t y)
-                               {
-                                  value = matrix.ToFlatIndex(x, y);
-                               }),
+   result = matrix.Ops(MapEx(matrix,
+                          [&matrix](int& value, int, size_t x, size_t y)
+                          {
+                             value = matrix.ToFlatIndex(x, y);
+                          }),
       FoldEx(sum,
          [](size_t& sum, int value)
          {
