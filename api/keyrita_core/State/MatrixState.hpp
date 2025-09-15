@@ -84,7 +84,7 @@ public:
     */
    template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(
+      MatrixFuncExecutor<TDims...>::Run(
          *this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
    }
 
@@ -98,7 +98,7 @@ public:
     */
    template <typename TFunc> void ForEach(TFunc&& f) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(*this, ForEachEx(std::forward<TFunc>(f)));
+      MatrixFuncExecutor<TDims...>::Run(*this, ForEachEx(std::forward<TFunc>(f)));
    }
 
    /**
@@ -113,7 +113,7 @@ public:
     */
    template <typename TFunc> size_t CountIf(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(
+      return MatrixFuncExecutor<TDims...>::Run(
          *this, CountIfEx(std::forward<TFunc>(pred)));
    }
 
@@ -129,7 +129,7 @@ public:
     */
    template <typename TFunc> bool All(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(*this, AllEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<TDims...>::Run(*this, AllEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -144,7 +144,7 @@ public:
     */
    template <typename TFunc> bool Any(TFunc&& pred) const
    {
-      return MatrixFuncExecutor<const T, TDims...>::Run(*this, AnyEx(std::forward<TFunc>(pred)));
+      return MatrixFuncExecutor<TDims...>::Run(*this, AnyEx(std::forward<TFunc>(pred)));
    }
 
    /**
@@ -159,7 +159,7 @@ public:
    template <typename TFoldResult = T, typename TFunc>
    void Fold(TFoldResult& initialValue, TFunc&& func) const
    {
-      MatrixFuncExecutor<const T, TDims...>::Run(
+      MatrixFuncExecutor<TDims...>::Run(
          *this, FoldEx(initialValue, std::forward<TFunc>(func)));
    }
 
@@ -415,7 +415,7 @@ public:
     */
    template <typename TMatrix, typename TFunc> void Map(TMatrix& outMatrix, TFunc&& mapper)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(
+      MatrixFuncExecutor<TDims...>::Run(
          *this, MapEx(outMatrix, std::forward<TFunc>(mapper)));
    }
 
@@ -431,7 +431,7 @@ public:
     */
    template <typename TFunc> void Map(TFunc&& mapper)
    {
-      MatrixFuncExecutor<T, TDims...>::Run(
+      MatrixFuncExecutor<TDims...>::Run(
          *this, MapEx(*this, std::forward<TFunc>(mapper)));
    }
 

@@ -484,7 +484,7 @@ concept WalkableMatrix = requires(const std::remove_pointer_t<TMatrix>& matrix) 
    };
 };
 
-template <typename T, size_t... TDims> class MatrixFuncExecutor
+template <size_t... TDims> class MatrixFuncExecutor
 {
 public:
    /**
