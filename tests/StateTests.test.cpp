@@ -1,5 +1,6 @@
 #include "keyrita_core/State.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
+#include "keyrita_core/State/MatrixUtils.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -293,6 +294,7 @@ template <template <typename, size_t...> typename TMatrix, size_t... TDims> clas
 {
 public:
    using mat_t = TMatrix<func_test_t, TDims...>;
+   using mat_other_t = TMatrix<double, TDims...>;
 
    constexpr static void Test()
    {
@@ -333,6 +335,18 @@ private:
          {
             ASSERT_EQ(value, (idx + 1) * 2);
          });
+
+      // Test map to other typed matrix.
+      mat_other_t otherMat;
+      MatrixUtils::Clear(matrix);
+      MatrixUtils::FillSequence(otherMat);
+      matrix.Map(otherMat, [](double& v, func_test_t value)
+      {
+         v = value;
+      });
+      otherMat.ForEach([](double value){
+         ASSERT_EQ(0.0, value);
+      });
    }
 
    constexpr static void TestOneArg(mat_t& matrix)
