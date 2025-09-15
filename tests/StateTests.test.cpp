@@ -936,15 +936,11 @@ TEST(StateTests, TestMatrixChainedOps)
    // Test a map and sum followed by a query.
    size_t sum = 0;
    bool result = matrix.Ops(Map(matrix,
-                               [&matrix](int& value, int, size_t x, size_t y)
+                               [&matrix, &sum](int& value, int, size_t x, size_t y)
                                {
                                   value = matrix.ToFlatIndex(x, y);
+                                  sum += value;
                                }),
-      Fold(sum,
-         [](size_t& sum, int value)
-         {
-            sum += value;
-         }),
       All(
          [](int value)
          {
@@ -956,15 +952,11 @@ TEST(StateTests, TestMatrixChainedOps)
 
    sum = 0;
    result = matrix.Ops(Map(matrix,
-                          [&matrix](int& value, int, size_t x, size_t y)
+                          [&matrix, &sum](int& value, int, size_t x, size_t y)
                           {
                              value = matrix.ToFlatIndex(x, y);
+                             sum += value;
                           }),
-      Fold(sum,
-         [](size_t& sum, int value)
-         {
-            sum += value;
-         }),
       Any(
          [](int value)
          {
@@ -1011,16 +1003,16 @@ TEST(StateTests, TestSameDims)
    ASSERT_FALSE((a.HasSameDims<1, 1, 1>()));
 
    HeapMatrixState<double, 10, 10, 10> b;
-   ASSERT_TRUE(a.HasSameDims(b));
+   ASSERT_TRUE(a.HasSameDims<decltype(b)>());
 
    HeapMatrixState<double, 9, 10, 10> c;
-   ASSERT_FALSE(a.HasSameDims(c));
+   ASSERT_FALSE(a.HasSameDims<decltype(c)>());
 
    HeapMatrixState<double, 10, 10> d;
-   ASSERT_FALSE(a.HasSameDims(d));
+   ASSERT_FALSE(a.HasSameDims<decltype(d)>());
 
    HeapMatrixState<double, 10> e;
-   ASSERT_FALSE(a.HasSameDims(e));
+   ASSERT_FALSE(a.HasSameDims<decltype(e)>());
 }
 
 int main(int argc, char** argv)

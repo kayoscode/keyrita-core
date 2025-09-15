@@ -3,6 +3,7 @@
 #include "keyrita_core/State/MatrixAlloc.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/StateBase.hpp"
+#include <type_traits>
 
 namespace kc
 {
@@ -232,15 +233,15 @@ public:
    /**
     * @return     True if all the dimensions are the same, false otherwise.
     */
-   template <typename TMatrix> constexpr bool HasSameDims(const TMatrix& other) const
+   template <typename TMatrix> constexpr static bool HasSameDims() 
    {
-      return TMatrix::template ApplyDims<HasSameDimsChecker>::HasSameDims();
+      return std::remove_cvref_t<TMatrix>::template ApplyDims<HasSameDimsChecker>::HasSameDims();
    }
 
    /**
     * @return     True if the dims match the dims passed in the parameter pack.
     */
-   template <size_t... TOtherDims> constexpr bool HasSameDims() const
+   template <size_t... TOtherDims> constexpr static bool HasSameDims()
    {
       return HasSameDimsChecker<TOtherDims...>::HasSameDims();
    }
