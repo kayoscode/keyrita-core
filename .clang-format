@@ -15,7 +15,7 @@ SpacesBeforeTrailingComments: 3
 AlignConsecutiveMacros: Consecutive
 AlignAfterOpenBracket: DontAlign
 ColumnLimit: 100
-AllowShortLambdasOnASingleLine: true
+AllowShortLambdasOnASingleLine: false
 AllowShortFunctionsOnASingleLine: false
 UseCRLF: false
 PenaltyBreakBeforeFirstCallParameter: 1000
