@@ -83,13 +83,31 @@ public:
     * target matrix.
     *
     * @param      f      Function called per element. There are 3 valid formats:
-    * 1. [](const T& out, const T& input)
-    * 1. [](const T& out, const T& input, size_t flatIndex)
-    * 1. [](const T& out, const T& input, size_t... NIndices)
+    * 1. [](T& out, const T& input)
+    * 1. [](T& out, const T& input, size_t flatIndex)
+    * 1. [](T& out, const T& input, size_t... NIndices)
     */
    template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
    {
       return MatrixFuncExecutor::Run(*this, kc::Map(outMatrix, std::forward<TFunc>(mapper)));
+   }
+
+   /**
+    * @brief
+    * Iterates through each element providing a references to the output matrix. It may be assigned
+    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
+    * target matrix.
+    *
+    * @param      f      Function called per element. There are 3 valid formats:
+    * 1. [](T& out, const T& input1, const T& input2)
+    * 1. [](T& out, const T& input1, const T& input2, size_t flatIndex)
+    * 1. [](T& out, const T& input1, const T& input2, size_t... NIndices)
+    */
+   template <typename TMatrix, typename TOtherMatrix, typename TFunc>
+   TMatrix& Zip(TMatrix& outMatrix, const TOtherMatrix& otherMatrix, TFunc&& mapper)
+   {
+      return MatrixFuncExecutor::Run(
+         *this, kc::Zip(outMatrix, otherMatrix, std::forward<TFunc>(mapper)));
    }
 
    /**

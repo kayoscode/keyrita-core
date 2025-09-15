@@ -1,4 +1,3 @@
-#include "Timer.hpp"
 #include "keyrita_core/State.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/MatrixState.hpp"
@@ -7,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <gtest/gtest.h>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -146,7 +146,11 @@ TEST(StateTests, GeneralVectorStateTests)
    IVectorState<int, 30>& roVec = vec;
 
    // Check if default works.
-   ASSERT_TRUE(roVec.All([](int value) { return value == 1; }));
+   ASSERT_TRUE(roVec.All(
+      [](int value)
+      {
+         return value == 1;
+      }));
 
    ASSERT_EQ(vec.GetFlatSize(), roVec.GetFlatSize());
    ASSERT_EQ(vec.GetFlatSize(), 30);
@@ -173,12 +177,28 @@ TEST(StateTests, GeneralVectorStateTests)
       ASSERT_EQ(vec[i], 1);
    }
 
-   ASSERT_TRUE(roVec.Any([](int value) { return value == 1; }));
+   ASSERT_TRUE(roVec.Any(
+      [](int value)
+      {
+         return value == 1;
+      }));
 
    // Check a few of the functional things
-   vec.Map([](int& value, int, size_t index) { value = index + 1; });
-   vec.Map([](int& value, int) { value *= 2; });
-   vec.ForEach([](int value, size_t index) { ASSERT_EQ(value, (index + 1) * 2); });
+   vec.Map(
+      [](int& value, int, size_t index)
+      {
+         value = index + 1;
+      });
+   vec.Map(
+      [](int& value, int)
+      {
+         value *= 2;
+      });
+   vec.ForEach(
+      [](int value, size_t index)
+      {
+         ASSERT_EQ(value, (index + 1) * 2);
+      });
 
    vec.SetValues(
       [](std::span<int> values, size_t count)
@@ -189,7 +209,11 @@ TEST(StateTests, GeneralVectorStateTests)
          }
       });
 
-   ASSERT_TRUE(roVec.All([](int value) { return value == 30; }));
+   ASSERT_TRUE(roVec.All(
+      [](int value)
+      {
+         return value == 30;
+      }));
 }
 
 typedef size_t func_test_t;
@@ -287,25 +311,49 @@ public:
 private:
    constexpr static void TestNoArg(mat_t& matrix)
    {
-      matrix.Map([](func_test_t& value, func_test_t) { value = 1; });
+      matrix.Map(
+         [](func_test_t& value, func_test_t)
+         {
+            value = 1;
+         });
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 1));
 
       // Test functional map
       MatrixUtils::FillSequence(matrix);
       ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
 
-      matrix.Map([](func_test_t& value, func_test_t) { value += 1; });
-      matrix.Map([](func_test_t& value, func_test_t) { value *= 2; });
+      matrix.Map(
+         [](func_test_t& value, func_test_t)
+         {
+            value += 1;
+         });
+      matrix.Map(
+         [](func_test_t& value, func_test_t)
+         {
+            value *= 2;
+         });
 
       // Check that every value was correctly set.
-      matrix.ForEach([](func_test_t value, size_t idx) { ASSERT_EQ(value, (idx + 1) * 2); });
+      matrix.ForEach(
+         [](func_test_t value, size_t idx)
+         {
+            ASSERT_EQ(value, (idx + 1) * 2);
+         });
 
       // Test map to other typed matrix.
       mat_other_t otherMat;
       MatrixUtils::Clear(matrix);
       MatrixUtils::FillSequence(otherMat);
-      matrix.Map(otherMat, [](double& v, func_test_t value) { v = value; });
-      otherMat.ForEach([](double value) { ASSERT_EQ(0.0, value); });
+      matrix.Map(otherMat,
+         [](double& v, func_test_t value)
+         {
+            v = value;
+         });
+      otherMat.ForEach(
+         [](double value)
+         {
+            ASSERT_EQ(0.0, value);
+         });
    }
 
    constexpr static void TestOneArg(mat_t& matrix)
@@ -314,7 +362,11 @@ private:
       MatrixUtils::Clear(matrix);
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
 
-      matrix.Map([](func_test_t& value, func_test_t, size_t flatIndex) { value = flatIndex; });
+      matrix.Map(
+         [](func_test_t& value, func_test_t, size_t flatIndex)
+         {
+            value = flatIndex;
+         });
       ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
    }
 
@@ -333,14 +385,131 @@ private:
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
 
       // Check that we can iterate with these indices
-      matrix.Map([&matrix](func_test_t& value, func_test_t, TIdx... indices)
-         { value = matrix.ToFlatIndex(indices...); });
+      matrix.Map(
+         [&matrix](func_test_t& value, func_test_t, TIdx... indices)
+         {
+            value = matrix.ToFlatIndex(indices...);
+         });
 
       ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
 
       // Iterate through with flat indices and verify the order is the same, that checks that the
       // indices were correctly iterated and mapped.
-      matrix.ForEach([](func_test_t value, size_t idx) { ASSERT_EQ(value, idx); });
+      matrix.ForEach(
+         [](func_test_t value, size_t idx)
+         {
+            ASSERT_EQ(value, idx);
+         });
+   }
+};
+
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixZip
+{
+public:
+   using mat_t = TMatrix<func_test_t, TDims...>;
+
+   constexpr static void Test()
+   {
+      mat_t matrix;
+      TestNoArg(matrix);
+      TestOneArg(matrix);
+      TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
+   }
+
+private:
+   constexpr static void TestNoArg(mat_t& matrix)
+   {
+      // Test map into zip
+      MatrixUtils::FillSequence(matrix);
+      matrix.Ops(1,
+         Map(matrix,
+            [](func_test_t& result, func_test_t value)
+            {
+               result = value * 2;
+            }),
+         // Square
+         Zip(matrix, matrix,
+            [](func_test_t& result, func_test_t a, func_test_t b)
+            {
+               result = a * b;
+            }),
+         ForEach(
+            [](func_test_t value, size_t flatIdx)
+            {
+               ASSERT_EQ(value, (flatIdx * 2) * (flatIdx * 2));
+            }));
+
+      // Test combining two values together into a matrix of tuples.
+      mat_t m1;
+      mat_t m2;
+      HeapMatrixState<std::tuple<func_test_t, func_test_t>, TDims...> r1;
+
+      m1.Ops(1,
+         Map(m1,
+            [](func_test_t& result, func_test_t, size_t flatIdx)
+            {
+               result = flatIdx;
+            }),
+         Map(m2,
+            [](func_test_t& result, func_test_t value)
+            {
+               result = value * 2;
+            }),
+         Zip(r1, m1,
+            [](std::tuple<func_test_t, func_test_t>& result, func_test_t v1, func_test_t v2)
+            {
+               result = std::make_tuple(v1, v2);
+            }),
+         ForEach([](const std::tuple<func_test_t, func_test_t>& values)
+            {
+               ASSERT_EQ(std::get<0>(values), std::get<1>(values) * 2);
+            }));
+   }
+
+   constexpr static void TestOneArg(mat_t& matrix)
+   {
+      // We really just need to test if it's callable and the indices are correct.
+      MatrixUtils::Clear(matrix);
+      ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
+
+      matrix.Zip(matrix, matrix,
+         [](func_test_t& value, func_test_t, func_test_t, size_t flatIndex)
+         {
+            value = flatIndex;
+         });
+      ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
+   }
+
+   template <size_t... TIdx>
+   constexpr static void TestNArgsHelper(mat_t& matrix, std::index_sequence<TIdx...>)
+   {
+      TestNArgs(matrix, TIdx...);
+   }
+
+   template <typename... TIdx>
+      requires(sizeof...(TDims) == sizeof...(TIdx))
+   constexpr static void TestNArgs(mat_t& matrix, TIdx... idx)
+   {
+      // We really just need to test if it's callable and the indices are correct.
+      MatrixUtils::Clear(matrix);
+      ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
+
+      // Check that we can iterate with these indices
+      matrix.Zip(matrix, matrix,
+         [&matrix](func_test_t& value, func_test_t, func_test_t, TIdx... indices)
+         {
+            value = matrix.ToFlatIndex(indices...);
+         });
+
+      ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
+
+      // Iterate through with flat indices and verify the order is the same, that checks that the
+      // indices were correctly iterated and mapped.
+      matrix.ForEach(
+         [](func_test_t value, size_t idx)
+         {
+            ASSERT_EQ(value, idx);
+         });
    }
 };
 
@@ -467,18 +636,36 @@ private:
    static void TestNoArg(mat_t& matrix)
    {
       matrix.SetValues(10);
-      ASSERT_EQ(matrix.CountIf([](func_test_t value) { return value == 10; }), 10);
+      ASSERT_EQ(matrix.CountIf(
+                   [](func_test_t value)
+                   {
+                      return value == 10;
+                   }),
+         10);
 
-      ASSERT_EQ(matrix.CountIf([](func_test_t value) { return value == 11; }), 0);
+      ASSERT_EQ(matrix.CountIf(
+                   [](func_test_t value)
+                   {
+                      return value == 11;
+                   }),
+         0);
 
       matrix.SetValue(11, matrix.GetFlatSize() - 1);
-      ASSERT_EQ(matrix.CountIf([](func_test_t value) { return value == 11; }), 1);
+      ASSERT_EQ(matrix.CountIf(
+                   [](func_test_t value)
+                   {
+                      return value == 11;
+                   }),
+         1);
    }
 
    static void TestOneArg(mat_t& matrix)
    {
       ASSERT_EQ(matrix.CountIf(
-                   [&](func_test_t value, size_t idx) { return idx < matrix.GetFlatSize() - 1; }),
+                   [&](func_test_t value, size_t idx)
+                   {
+                      return idx < matrix.GetFlatSize() - 1;
+                   }),
          matrix.GetFlatSize() - 1);
    }
 
@@ -541,16 +728,31 @@ private:
       ASSERT_EQ(numVisited, 1);
 
       matrix.SetValue(11, matrix.GetFlatSize() - 1);
-      ASSERT_EQ(matrix.All([&](func_test_t value) { return value == 10; }), false);
+      ASSERT_EQ(matrix.All(
+                   [&](func_test_t value)
+                   {
+                      return value == 10;
+                   }),
+         false);
    }
 
    static void TestOneArg(mat_t& matrix)
    {
       MatrixUtils::FillSequence(matrix);
 
-      ASSERT_EQ(matrix.All([&](func_test_t value, size_t idx) { return value == idx; }), true);
+      ASSERT_EQ(matrix.All(
+                   [&](func_test_t value, size_t idx)
+                   {
+                      return value == idx;
+                   }),
+         true);
 
-      ASSERT_EQ(matrix.All([&](func_test_t value, size_t idx) { return value != idx; }), false);
+      ASSERT_EQ(matrix.All(
+                   [&](func_test_t value, size_t idx)
+                   {
+                      return value != idx;
+                   }),
+         false);
    }
 
    template <size_t... TIdx>
@@ -624,16 +826,31 @@ private:
       ASSERT_EQ(numVisited, matrix.GetFlatSize());
 
       matrix.SetValue(11, matrix.GetFlatSize() - 1);
-      ASSERT_EQ(matrix.Any([&](func_test_t value) { return value == 11; }), true);
+      ASSERT_EQ(matrix.Any(
+                   [&](func_test_t value)
+                   {
+                      return value == 11;
+                   }),
+         true);
    }
 
    static void TestOneArg(mat_t& matrix)
    {
       MatrixUtils::FillSequence(matrix);
 
-      ASSERT_EQ(matrix.Any([&](func_test_t value, size_t idx) { return value == idx; }), true);
+      ASSERT_EQ(matrix.Any(
+                   [&](func_test_t value, size_t idx)
+                   {
+                      return value == idx;
+                   }),
+         true);
 
-      ASSERT_EQ(matrix.Any([&](func_test_t value, size_t idx) { return value != idx; }), false);
+      ASSERT_EQ(matrix.Any(
+                   [&](func_test_t value, size_t idx)
+                   {
+                      return value != idx;
+                   }),
+         false);
    }
 
    template <size_t... TIdx>
@@ -693,13 +910,20 @@ private:
    {
       MatrixUtils::FillSequence(matrix);
       size_t sum = 0;
-      matrix.Fold(sum, [](auto& acc, func_test_t value) { acc += value; });
+      matrix.Fold(sum,
+         [](auto& acc, func_test_t value)
+         {
+            acc += value;
+         });
       ASSERT_EQ(sum, Trianglate(matrix.GetFlatSize() - 1));
 
       // Test on generic result
       std::vector<func_test_t> foldResult;
-      foldResult =
-         matrix.Fold(foldResult, [](auto& acc, func_test_t value) { acc.push_back(value); });
+      foldResult = matrix.Fold(foldResult,
+         [](auto& acc, func_test_t value)
+         {
+            acc.push_back(value);
+         });
       TestFoldResult(foldResult);
    }
 
@@ -707,8 +931,11 @@ private:
    {
       // Test on generic result
       std::vector<func_test_t> foldResult;
-      std::vector<func_test_t>& fr = matrix.Fold(
-         foldResult, [](auto& acc, func_test_t value, size_t flatIdx) { acc.push_back(flatIdx); });
+      std::vector<func_test_t>& fr = matrix.Fold(foldResult,
+         [](auto& acc, func_test_t value, size_t flatIdx)
+         {
+            acc.push_back(flatIdx);
+         });
       TestFoldResult(foldResult);
       TestFoldResult(fr);
 
@@ -786,6 +1013,14 @@ TEST(StateTests, TestMatrixMap)
    TestMatrixMap<StaticMatrixState, 5, 1, 2>::Test();
 }
 
+TEST(StateTests, TestMatrixZip)
+{
+   TestMatrixZip<HeapVectorState, 10>::Test();
+   TestMatrixZip<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixZip<StaticVectorState, 10>::Test();
+   TestMatrixZip<StaticMatrixState, 5, 1, 2>::Test();
+}
+
 TEST(StateTests, TestMatrixFold)
 {
 
@@ -800,14 +1035,30 @@ TEST(StateTests, TestMatrixSinglePassOps)
    HeapMatrixState<int, 10, 10> matrix;
 
    // Test one op.
-   matrix.Ops(1, Map(matrix, [](int& value, int, size_t flatSize) { value = flatSize; }));
+   matrix.Ops(1, Map(matrix,
+                    [](int& value, int, size_t flatSize)
+                    {
+                       value = flatSize;
+                    }));
 
-   ASSERT_TRUE(matrix.All([](int value, size_t flatIdx) { return value == flatIdx; }));
+   ASSERT_TRUE(matrix.All(
+      [](int value, size_t flatIdx)
+      {
+         return value == flatIdx;
+      }));
 
    // Test our all operaiton inside ops.
-   ASSERT_TRUE(matrix.Ops(1, All([](int value, size_t flatIdx) { return value == flatIdx; })));
+   ASSERT_TRUE(matrix.Ops(1, All(
+                                [](int value, size_t flatIdx)
+                                {
+                                   return value == flatIdx;
+                                })));
 
-   ASSERT_FALSE(matrix.Ops(Any([](int value, size_t flatIdx) { return value != flatIdx; })));
+   ASSERT_FALSE(matrix.Ops(Any(
+      [](int value, size_t flatIdx)
+      {
+         return value != flatIdx;
+      })));
 
    // Test a map and sum followed by a query.
    size_t sum = 0;
@@ -818,7 +1069,11 @@ TEST(StateTests, TestMatrixSinglePassOps)
             value = matrix.ToFlatIndex(x, y);
             sum += value;
          }),
-      All([](int value) { return true; }));
+      All(
+         [](int value)
+         {
+            return true;
+         }));
 
    ASSERT_EQ(sum, Trianglate(matrix.GetFlatSize() - 1));
    ASSERT_TRUE(result);
@@ -831,7 +1086,11 @@ TEST(StateTests, TestMatrixSinglePassOps)
             value = matrix.ToFlatIndex(x, y);
             sum += value;
          }),
-      Any([](int value) { return false; }));
+      Any(
+         [](int value)
+         {
+            return false;
+         }));
 
    ASSERT_EQ(sum, Trianglate(matrix.GetFlatSize() - 1));
    ASSERT_FALSE(result);
@@ -841,9 +1100,18 @@ TEST(StateTests, TestMatrixSinglePassOps)
    MatrixUtils::FillSequence(matrix);
 
    sum = 0;
-   matrix.Ops(1, Map(matrix2, [](int& result, int value) { result = value * 2; }),
+   matrix.Ops(1,
+      Map(matrix2,
+         [](int& result, int value)
+         {
+            result = value * 2;
+         }),
       // This should fold over the second matrix.
-      Fold(sum, [](size_t& acc, int value) { acc += value; }));
+      Fold(sum,
+         [](size_t& acc, int value)
+         {
+            acc += value;
+         }));
 
    ASSERT_EQ(MatrixUtils::Sum(matrix) * 2, MatrixUtils::Sum(matrix2));
 }
@@ -856,15 +1124,35 @@ void TestChainedMultiOps(int maxPasses)
 
    // Perform a series of operations that takes exactly 2 loops through the data despite doing more
    // work than that. All this should execute in 2 loops
-   bool result = mat1.Ops(maxPasses, Map(mat1, [](int& result, int, int x, int y) { result = x; }),
-      ForEach([](int value, int x, int y) { ASSERT_EQ(value, x); }),
+   bool result = mat1.Ops(maxPasses,
+      Map(mat1,
+         [](int& result, int, int x, int y)
+         {
+            result = x;
+         }),
+      ForEach(
+         [](int value, int x, int y)
+         {
+            ASSERT_EQ(value, x);
+         }),
       // The same data should then be passed into the next expression
-      Fold(mat2, [](HeapMatrixState<int, 10>& result, int value, int x, int y)
-         { result.GetRef(x) += value; }),
+      Fold(mat2,
+         [](HeapMatrixState<int, 10>& result, int value, int x, int y)
+         {
+            result.GetRef(x) += value;
+         }),
       // Now it should have piped the second matrix into the next expression
-      ForEach([](int value, int x) { ASSERT_EQ(value, x * 10); }),
+      ForEach(
+         [](int value, int x)
+         {
+            ASSERT_EQ(value, x * 10);
+         }),
       // The foreach value should still be piped into the all expression, enforce here.
-      All([](int value, int x) { return value == x * 10; }));
+      All(
+         [](int value, int x)
+         {
+            return value == x * 10;
+         }));
 
    ASSERT_TRUE(result);
 }

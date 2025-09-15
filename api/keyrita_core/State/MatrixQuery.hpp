@@ -99,6 +99,14 @@ concept MatrixFuncExHasResult = requires(TExec& exec) {
    { exec.GetResult() };
 } && (!std::same_as<MatrixFuncExResult<TExec>, void>);
 
+template <typename TMatrix>
+concept WalkableMatrix = requires(const TMatrix& matrix) {
+   // Make sure there's a method to get access to a readonly span of data.
+   { matrix.GetValues() } -> std::convertible_to<std::span<const MatrixValueType<TMatrix>>>;
+
+   // TODO: Please enforce here it has a HasSameDims method
+};
+
 /**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
  *
@@ -131,8 +139,7 @@ public:
 
 private:
    template <typename TFunc, size_t TCurrentDimIdx, size_t TFirstDim, size_t... TRemainingDims>
-   static constexpr bool WalkImpl(
-      TFunc&& func, std::array<size_t, sizeof...(TDims)>& indices)
+   static constexpr bool WalkImpl(TFunc&& func, std::array<size_t, sizeof...(TDims)>& indices)
    {
       for (size_t i = 0; i < TFirstDim; i++)
       {
@@ -438,7 +445,8 @@ public:
     * @brief      Constructor: Create or inject state here.
     */
    Map(TMatrix& resultMatrix, TFunc&& func)
-      : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix)
+      : mFunc(std::forward<TFunc>(func)), mResultMatrix(std::forward<TMatrix>(resultMatrix)),
+        mData(mResultMatrix.GetValues())
    {
    }
 
@@ -465,7 +473,7 @@ private:
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mResultMatrix.GetRef(flatIndex), value);
+      mFunc(mData[flatIndex], value);
    }
 
    template <typename T, typename... TIdx>
@@ -473,26 +481,84 @@ private:
                (sizeof...(TIdx) > 1)
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mResultMatrix.GetRef(flatIndex), value, flatIndex);
+      mFunc(mData[flatIndex], value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, TIdx...>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mResultMatrix.GetRef(flatIndex), value, indices...);
+      mFunc(mData[flatIndex], value, indices...);
    }
 
    const std::decay_t<TFunc> mFunc;
-   TMatrix& mResultMatrix;
+   TMatrix&& mResultMatrix;
+   std::span<MatrixValueType<TMatrix>> mData;
 };
 
-template <typename TMatrix>
-concept WalkableMatrix = requires(const TMatrix& matrix) {
-   // Make sure there's a method to get access to a readonly span of data.
-   { matrix.GetValues() } -> std::convertible_to<std::span<const MatrixValueType<TMatrix>>>;
+template <typename TMatrix, typename TOtherMatrix, typename TFunc>
+   requires ValidMapTarget<TMatrix>
+class Zip
+{
+public:
+   /**
+    * @brief      Constructor: Create or inject state here.
+    */
+   Zip(TMatrix& resultMatrix, const TOtherMatrix& otherMatrix, TFunc&& func)
+      : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix),
+        mResultData(resultMatrix.GetValues()), mOtherMatrix(otherMatrix),
+        mOtherData(otherMatrix.GetValues())
+   {
+   }
 
-   // TODO: Please enforce here it has a HasSameDims method
+   /**
+    * @brief      Callback from the executor, here you get the value, and the indices.
+    * Pass along to the client and do whatever you need with the result.
+    */
+   template <typename T, typename... TIdx>
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      CallClient(value, flatIndex, indices...);
+   }
+
+   /**
+    * @return      Returns the matrix that was writen to by ref.
+    */
+   TMatrix& GetResult() const
+   {
+      return mResultMatrix;
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex]);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&, size_t> &&
+               (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex], flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex], indices...);
+   }
+
+   const std::decay_t<TFunc> mFunc;
+
+   // Matrix data.
+   TMatrix& mResultMatrix;
+   std::span<MatrixValueType<TMatrix>> mResultData;
+   const TOtherMatrix& mOtherMatrix;
+   std::span<const MatrixValueType<TOtherMatrix>> mOtherData;
 };
 
 class MatrixFuncExecutor
@@ -512,7 +578,7 @@ public:
    {
       auto matrixValues = matrix.GetValues();
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
-         [&matrixValues, &ex](size_t flatIdx, auto&&... indices)
+         [matrixValues, &ex](size_t flatIdx, auto&&... indices)
          {
             // Return the result to see if it should be canceled.
             return ex.Impl(matrixValues[flatIdx], flatIdx, indices...);
@@ -559,7 +625,12 @@ public:
    template <WalkableMatrix TMatrix, typename... TOps>
    static constexpr decltype(auto) Run(int maxPasses, TMatrix& matrix, TOps&&... ops)
    {
-      RunImpl(maxPasses, matrix, [](size_t, auto...) {}, std::forward<TOps>(ops)...);
+      RunImpl(
+         maxPasses, matrix,
+         [](size_t, auto...)
+         {
+         },
+         std::forward<TOps>(ops)...);
       return ReturnLastOp(std::forward<TOps>(ops)...);
    }
 
@@ -581,7 +652,7 @@ private:
       {
          RunImpl(
             maxPasses, matrix,
-            [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
+            [runner = std::forward<TCurrentRunner>(runner), &currentOp, matrixValues](
                size_t flatIdx, auto... indices)
             {
                runner(flatIdx, indices...);
@@ -601,7 +672,7 @@ private:
          {
             RunImpl(
                maxPasses, nextInput,
-               [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
+               [runner = std::forward<TCurrentRunner>(runner), &currentOp, matrixValues](
                   size_t flatIdx, auto... indices)
                {
                   runner(flatIdx, indices...);
@@ -612,10 +683,16 @@ private:
          else
          {
             // Combine the current runner into one loop by executing here.
-            ExecuteRunner(maxPasses, matrix, std::forward<TCurrentRunner>(runner), std::forward<TCurrentOp>(currentOp));
+            ExecuteRunner(maxPasses, matrix, std::forward<TCurrentRunner>(runner),
+               std::forward<TCurrentOp>(currentOp));
 
             // Start a new loop by creating a new runner and continue with the remaining ops.
-            RunImpl(maxPasses, nextInput, [](size_t, auto...) {}, ops...);
+            RunImpl(
+               maxPasses, nextInput,
+               [](size_t, auto...)
+               {
+               },
+               ops...);
          }
       }
       else
@@ -653,7 +730,7 @@ private:
       auto matrixValues = matrix.GetValues();
 
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
-         [&matrixValues, runner = std::forward<TRunner>(runner), &currentOp](
+         [matrixValues, runner = std::forward<TRunner>(runner), &currentOp](
             size_t flatIdx, auto&&... indices) -> void
          {
             // Call all the runners setup in the op chain.
