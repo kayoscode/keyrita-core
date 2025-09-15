@@ -496,6 +496,71 @@ private:
    std::span<MatrixValueType<TMatrix>> mData;
 };
 
+template <typename TMatrix, typename TOtherMatrix, typename TFunc>
+   requires ValidMapTarget<TMatrix>
+class Zip
+{
+public:
+   /**
+    * @brief      Constructor: Create or inject state here.
+    */
+   Zip(TMatrix& resultMatrix, const TOtherMatrix& otherMatrix, TFunc&& func)
+      : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix),
+        mResultData(resultMatrix.GetValues()), mOtherMatrix(otherMatrix),
+        mOtherData(otherMatrix.GetValues())
+   {
+   }
+
+   /**
+    * @brief      Callback from the executor, here you get the value, and the indices.
+    * Pass along to the client and do whatever you need with the result.
+    */
+   template <typename T, typename... TIdx>
+   inline constexpr void Impl(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      CallClient(value, flatIndex, indices...);
+   }
+
+   /**
+    * @return      Returns the matrix that was writen to by ref.
+    */
+   TMatrix& GetResult() const
+   {
+      return mResultMatrix;
+   }
+
+private:
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex]);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&, size_t> &&
+               (sizeof...(TIdx) > 1)
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex], flatIndex);
+   }
+
+   template <typename T, typename... TIdx>
+      requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, const T&, TIdx...>
+   constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
+   {
+      mFunc(mResultData[flatIndex], value, mOtherData[flatIndex], indices...);
+   }
+
+   const std::decay_t<TFunc> mFunc;
+
+   // Matrix data.
+   TMatrix& mResultMatrix;
+   std::span<MatrixValueType<TMatrix>> mResultData;
+   const TOtherMatrix& mOtherMatrix;
+   std::span<const MatrixValueType<TOtherMatrix>> mOtherData;
+};
+
 class MatrixFuncExecutor
 {
 public:

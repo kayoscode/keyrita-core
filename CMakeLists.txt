@@ -42,4 +42,4 @@ target_link_libraries(${EXE_NAME}_exec cpp-events)
 target_link_libraries(${EXE_NAME} cpp-events)
 
 # Add tests
-#add_subdirectory(tests)
+add_subdirectory(tests)

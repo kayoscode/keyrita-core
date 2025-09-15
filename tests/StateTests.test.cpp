@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <gtest/gtest.h>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -386,6 +387,116 @@ private:
       // Check that we can iterate with these indices
       matrix.Map(
          [&matrix](func_test_t& value, func_test_t, TIdx... indices)
+         {
+            value = matrix.ToFlatIndex(indices...);
+         });
+
+      ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
+
+      // Iterate through with flat indices and verify the order is the same, that checks that the
+      // indices were correctly iterated and mapped.
+      matrix.ForEach(
+         [](func_test_t value, size_t idx)
+         {
+            ASSERT_EQ(value, idx);
+         });
+   }
+};
+
+template <template <typename, size_t...> typename TMatrix, size_t... TDims> class TestMatrixZip
+{
+public:
+   using mat_t = TMatrix<func_test_t, TDims...>;
+
+   constexpr static void Test()
+   {
+      mat_t matrix;
+      TestNoArg(matrix);
+      TestOneArg(matrix);
+      TestNArgsHelper(matrix, std::make_index_sequence<sizeof...(TDims)>{});
+   }
+
+private:
+   constexpr static void TestNoArg(mat_t& matrix)
+   {
+      // Test map into zip
+      MatrixUtils::FillSequence(matrix);
+      matrix.Ops(1,
+         Map(matrix,
+            [](func_test_t& result, func_test_t value)
+            {
+               result = value * 2;
+            }),
+         // Square
+         Zip(matrix, matrix,
+            [](func_test_t& result, func_test_t a, func_test_t b)
+            {
+               result = a * b;
+            }),
+         ForEach(
+            [](func_test_t value, size_t flatIdx)
+            {
+               ASSERT_EQ(value, (flatIdx * 2) * (flatIdx * 2));
+            }));
+
+      // Test combining two values together into a matrix of tuples.
+      mat_t m1;
+      mat_t m2;
+      HeapMatrixState<std::tuple<func_test_t, func_test_t>, TDims...> r1;
+
+      m1.Ops(1,
+         Map(m1,
+            [](func_test_t& result, func_test_t, size_t flatIdx)
+            {
+               result = flatIdx;
+            }),
+         Map(m2,
+            [](func_test_t& result, func_test_t value)
+            {
+               result = value * 2;
+            }),
+         Zip(r1, m1,
+            [](std::tuple<func_test_t, func_test_t>& result, func_test_t v1, func_test_t v2)
+            {
+               result = std::make_tuple(v1, v2);
+            }),
+         ForEach([](const std::tuple<func_test_t, func_test_t>& values)
+            {
+               ASSERT_EQ(std::get<0>(values), std::get<1>(values) * 2);
+            }));
+   }
+
+   constexpr static void TestOneArg(mat_t& matrix)
+   {
+      // We really just need to test if it's callable and the indices are correct.
+      MatrixUtils::Clear(matrix);
+      ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
+
+      matrix.Zip(matrix, matrix,
+         [](func_test_t& value, func_test_t, func_test_t, size_t flatIndex)
+         {
+            value = flatIndex;
+         });
+      ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
+   }
+
+   template <size_t... TIdx>
+   constexpr static void TestNArgsHelper(mat_t& matrix, std::index_sequence<TIdx...>)
+   {
+      TestNArgs(matrix, TIdx...);
+   }
+
+   template <typename... TIdx>
+      requires(sizeof...(TDims) == sizeof...(TIdx))
+   constexpr static void TestNArgs(mat_t& matrix, TIdx... idx)
+   {
+      // We really just need to test if it's callable and the indices are correct.
+      MatrixUtils::Clear(matrix);
+      ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
+
+      // Check that we can iterate with these indices
+      matrix.Zip(matrix, matrix,
+         [&matrix](func_test_t& value, func_test_t, func_test_t, TIdx... indices)
          {
             value = matrix.ToFlatIndex(indices...);
          });
@@ -900,6 +1011,14 @@ TEST(StateTests, TestMatrixMap)
    TestMatrixMap<HeapMatrixState, 5, 1, 2>::Test();
    TestMatrixMap<StaticVectorState, 10>::Test();
    TestMatrixMap<StaticMatrixState, 5, 1, 2>::Test();
+}
+
+TEST(StateTests, TestMatrixZip)
+{
+   TestMatrixZip<HeapVectorState, 10>::Test();
+   TestMatrixZip<HeapMatrixState, 5, 1, 2>::Test();
+   TestMatrixZip<StaticVectorState, 10>::Test();
+   TestMatrixZip<StaticMatrixState, 5, 1, 2>::Test();
 }
 
 TEST(StateTests, TestMatrixFold)

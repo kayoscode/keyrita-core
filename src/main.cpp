@@ -1,17 +1,20 @@
 #include "keyrita_core/State.hpp"
+#include "keyrita_core/State/MatrixQuery.hpp"
+#include "keyrita_core/State/MatrixUtils.hpp"
 
 #include <Timer.hpp>
 #include <iostream>
 
 using namespace kc;
 using mat_t = uint32_t;
-constexpr size_t DIM = 50000;
+constexpr size_t DIM = 5000;
 constexpr size_t SIZE = (size_t)DIM * DIM;
 
 int main()
 {
    Timer t;
    size_t sum = 0;
+
    std::array<mat_t, SIZE>* pValues = new std::array<mat_t, SIZE>();
    std::span<mat_t, SIZE> values = *pValues;
 
@@ -23,6 +26,7 @@ int main()
       {
          size_t flatIdx = ComputeFlatIndex<DIM, DIM>(i, j);
          values[flatIdx] = flatIdx;
+         values[flatIdx] = values[flatIdx] * values[flatIdx];
          sum += values[flatIdx];
       }
    }
@@ -32,14 +36,17 @@ int main()
    std::cout << "Value: " << values[100] << "\n";
 
    HeapMatrixState<mat_t, DIM, DIM> matrix;
-
    t.Reset();
    sum = 0;
-   size_t result = matrix.Ops(1,
-      Map(matrix,
-         [](mat_t& value, mat_t, size_t flatIdx)
+   matrix.Ops(1, Map(matrix,
+      [](mat_t& result, mat_t, size_t flatIdx)
+      {
+         result = flatIdx;
+      }),
+      Zip(matrix, matrix,
+         [](mat_t& result, mat_t v1, mat_t v2, size_t flatIdx)
          {
-            value = flatIdx;
+            result = v1 * v2;
          }),
       Fold(sum,
          [](size_t& acc, mat_t value)
