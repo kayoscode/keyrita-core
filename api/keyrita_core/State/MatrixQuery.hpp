@@ -513,7 +513,7 @@ public:
    {
       auto matrixValues = matrix.GetValues();
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
-         [&matrixValues, &ex](size_t flatIdx, auto&&... indices)
+         [matrixValues, &ex](size_t flatIdx, auto&&... indices)
          {
             // Return the result to see if it should be canceled.
             return ex.Impl(matrixValues[flatIdx], flatIdx, indices...);
@@ -587,7 +587,7 @@ private:
       {
          RunImpl(
             maxPasses, matrix,
-            [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
+            [runner = std::forward<TCurrentRunner>(runner), &currentOp, matrixValues](
                size_t flatIdx, auto... indices)
             {
                runner(flatIdx, indices...);
@@ -607,7 +607,7 @@ private:
          {
             RunImpl(
                maxPasses, nextInput,
-               [runner = std::forward<TCurrentRunner>(runner), &currentOp, &matrixValues](
+               [runner = std::forward<TCurrentRunner>(runner), &currentOp, matrixValues](
                   size_t flatIdx, auto... indices)
                {
                   runner(flatIdx, indices...);
@@ -665,7 +665,7 @@ private:
       auto matrixValues = matrix.GetValues();
 
       TMatrix::template ApplyDims<MatrixStaticWalker>::Walk(
-         [&matrixValues, runner = std::forward<TRunner>(runner), &currentOp](
+         [matrixValues, runner = std::forward<TRunner>(runner), &currentOp](
             size_t flatIdx, auto&&... indices) -> void
          {
             // Call all the runners setup in the op chain.
