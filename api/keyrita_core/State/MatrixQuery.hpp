@@ -87,6 +87,17 @@ concept MatrixBulkAction =
       { predicate(values, count) } -> std::same_as<void>;
    };
 
+template <typename TExec>
+concept MatrixFuncExHasResult = requires(TExec& exec) {
+   { exec.GetResult() };
+} && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
+
+// Determines if a matrix result has the same type as given TResult (usually the input.)
+template <typename TResult, typename TExec>
+concept MatrixFuncHasSameResult = requires(TExec& exec) {
+      { exec.GetResult() } -> std::convertible_to<TResult>;
+   };
+
 /**
  * @brief      Traverses the matrix provindg a list of all indices per callback.
  *
@@ -181,11 +192,6 @@ private:
       return true;
    }
 };
-
-template <typename TExec>
-concept MatrixFuncExHasResult = requires(TExec& exec) {
-   { exec.GetResult() };
-} && (!std::same_as<decltype(std::declval<TExec>().GetResult()), void>);
 
 template <typename TFunc> class ForEachEx
 {
@@ -545,6 +551,33 @@ public:
    }
 
 private:
+   template <typename TOp, typename... TNextOps>
+   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, TOp&& currentOp, TNextOps&&... nextOps, size_t flatIndex, auto... indices)
+   {
+      // First, call the current op.
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+
+      // At this point, we can see if the result of the last op in the chain was the same type as the input.
+      // If so, feed it forward into the remaining ops.
+      if constexpr (MatrixFuncHasSameResult<decltype(matrixValues), TOp>)
+      {
+         // Call with the input taken from the result.
+         CallNextOps<TNextOps...>(currentOp.GetResult(), std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
+      }
+      else 
+      {
+         // Call the next with the same input.
+         CallNextOps<TNextOps...>(matrixValues, std::forward<TNextOps>(nextOps)..., flatIndex, indices...);
+      }
+   }
+
+   template <typename TOp>
+   static constexpr auto CallNextOps(std::span<T, TotalVecSize<TDims...>()> matrixValues, 
+      TOp&& currentOp, size_t flatIndex, auto... indices)
+   {
+      currentOp.Impl(matrixValues[flatIndex], flatIndex, indices...);
+   }
+
    template <typename TCurrentOp, typename... TRemainingOps>
    static constexpr void ExecuteNextOp(std::span<T, TotalVecSize<TDims...>()> matrixValues,
       TCurrentOp&& currentOp, TRemainingOps&&... remainingOps, size_t flatIndex, auto... indices)
