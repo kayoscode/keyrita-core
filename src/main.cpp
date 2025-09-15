@@ -5,7 +5,7 @@
 
 using namespace kc;
 using mat_t = uint32_t;
-constexpr size_t DIM = 50000;
+constexpr size_t DIM = 5000;
 constexpr size_t SIZE = (size_t)DIM * DIM;
 
 int main()
