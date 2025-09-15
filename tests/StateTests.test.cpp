@@ -1,3 +1,4 @@
+#include "Timer.hpp"
 #include "keyrita_core/State.hpp"
 #include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/MatrixState.hpp"
@@ -6,8 +7,6 @@
 #include <cmath>
 #include <cstddef>
 #include <gtest/gtest.h>
-#include <ranges>
-#include <stdexcept>
 #include <unordered_set>
 #include <utility>
 #include <vector>

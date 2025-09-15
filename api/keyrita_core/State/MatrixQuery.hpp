@@ -4,8 +4,6 @@
 
 #include <concepts>
 #include <cstddef>
-#include <limits>
-#include <random>
 #include <span>
 #include <stdexcept>
 #include <tuple>
@@ -505,8 +503,7 @@ concept WalkableMatrix = requires(const TMatrix& matrix) {
    // Make sure there's a method to get access to a readonly span of data.
    { matrix.GetValues() } -> std::convertible_to<std::span<const MatrixValueType<TMatrix>>>;
 
-   // Make sure there's a method to check if another matrix has the same dimensions as itself.
-   //{ matrix.HasSameDims(matrix) } -> std::same_as<bool>;
+   // TODO: Please enforce here it has a HasSameDims method
 };
 
 class MatrixFuncExecutor
@@ -573,8 +570,8 @@ public:
    template <WalkableMatrix TMatrix, typename... TOps>
    static constexpr decltype(auto) Run(int maxPasses, TMatrix& matrix, TOps&&... ops)
    {
-      RunImpl(maxPasses, matrix, [](size_t, auto...) {}, ops...);
-      return ReturnLastOp(ops...);
+      RunImpl(maxPasses, matrix, [](size_t, auto...) {}, std::forward<TOps>(ops)...);
+      return ReturnLastOp(std::forward<TOps>(ops)...);
    }
 
 private:

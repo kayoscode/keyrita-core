@@ -1,4 +1,5 @@
 #include "keyrita_core/State.hpp"
+#include "keyrita_core/State/MatrixQuery.hpp"
 #include "keyrita_core/State/MatrixState.hpp"
 #include "keyrita_core/State/MatrixUtils.hpp"
 
@@ -7,47 +8,54 @@
 
 using namespace kc;
 using mat_t = uint32_t;
-constexpr size_t SIZE = (size_t)50000 * 50000;
+constexpr size_t DIM = 5000;
+constexpr size_t SIZE = (size_t)DIM * DIM;
 
 int main()
 {
    Timer t;
-   size_t sum = 0;
+   volatile size_t sum = 0;
 
-   HeapMatrixState<mat_t, 5000, 5000> matrix;
+   HeapMatrixState<mat_t, DIM, DIM> matrix;
 
    t.Reset();
    sum = 0;
    size_t result = matrix.Ops(1,
-        Map(matrix, [](mat_t& value, mat_t, size_t flatIdx)
+        Map(matrix, [](mat_t& value, mat_t, size_t x, size_t y)
         {
-            value = flatIdx;
+            value = ComputeFlatIndex<DIM, DIM>(x, y);
         }),
-        Fold(sum, [](size_t& acc, mat_t value)
+        Fold(sum, [](volatile size_t& acc, mat_t value)
         {
             acc += value;
         }));
 
    std::cout << t.Milliseconds() << "\n";
-   std::cout << result << "\n";
+   std::cout << sum << "\n";
    std::cout << matrix[100] << "\n";
 
-   // std::array<mat_t, SIZE>* pValues = new std::array<mat_t, SIZE>();
-   // std::span<mat_t, SIZE> values = *pValues;
+   std::array<mat_t, SIZE>* pValues = new std::array<mat_t, SIZE>();
+   std::span<mat_t, SIZE> values = *pValues;
 
-   // t.Reset();
-   // for (size_t i = 0; i < SIZE; i++)
-   // {
-   //    values[i] = i;
-   // }
+   t.Reset();
+   for (size_t i = 0; i < DIM; i++)
+   {
+       for (size_t j = 0; j < DIM; j++)
+       {
+          values[ComputeFlatIndex<DIM, DIM>(i, j)] = ComputeFlatIndex<DIM, DIM>(i, j);
+       }
+   }
 
-   // sum = 0;
-   // for (size_t i = 0; i < SIZE; i++)
-   // {
-   //    sum += values[i];
-   // }
+   sum = 0;
+   for (size_t i = 0; i < DIM; i++)
+   {
+       for (size_t j = 0; j < DIM; j++)
+       {
+          sum += values[ComputeFlatIndex<DIM, DIM>(i, j)];
+       }
+   }
 
-   // std::cout << t.Milliseconds() << "\n";
-   // std::cout << sum << "\n";
-   // std::cout << values[100] << "\n";
+   std::cout << t.Milliseconds() << "\n";
+   std::cout << sum << "\n";
+   std::cout << values[100] << "\n";
 }
