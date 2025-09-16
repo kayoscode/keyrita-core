@@ -184,6 +184,38 @@ public:
    }
 
    /**
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single
+    * loop whenever possible.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
+    */
+   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
+   {
+      return MatrixOpsExecutor::Run(
+         std::numeric_limits<int>::max(), *this, std::forward<TFuncs>(funcs)...);
+   }
+
+   /**
+    * @brief      Performs a series of operations. Attempts to condense all operations into a single
+    * loop whenever possible. Limits the number of passes through the data. We throw a runtime
+    * exception if more passes occur than expected.
+    *
+    * NOTE, by default, we only check this in debug mode, but if you define
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT, we will check in release mode too.
+    *
+    * Typically, we don't assume passing through the data more times than you expected to be an
+    * error since production software should work correctly either way. But the
+    * KC_ALWAYS_ENFORCE_PASS_LIMIT override is designed for cases where it is necessary to enforce
+    * it. One example is unit testing.
+    * @param      funcs   The funcs
+    * @return     The result of the last expression in the list.
+    */
+   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs)
+   {
+      return MatrixOpsExecutor::Run(maxPasses, *this, std::forward<TFuncs>(funcs)...);
+   }
+
+   /**
     * @brief      Returns a readonly view of the data.
     * @return     The readonly data view as a span.
     */
@@ -328,38 +360,6 @@ public:
    }
 
    /**
-    * @brief      Performs a series of operations. Attempts to condense all operations into a single
-    * loop whenever possible.
-    * @param      funcs   The funcs
-    * @return     The result of the last expression in the list.
-    */
-   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
-   {
-      return MatrixOpsExecutor::Run(
-         std::numeric_limits<int>::max(), *this, std::forward<TFuncs>(funcs)...);
-   }
-
-   /**
-    * @brief      Performs a series of operations. Attempts to condense all operations into a single
-    * loop whenever possible. Limits the number of passes through the data. We throw a runtime
-    * exception if more passes occur than expected.
-    *
-    * NOTE, by default, we only check this in debug mode, but if you define
-    * KC_ALWAYS_ENFORCE_PASS_LIMIT, we will check in release mode too.
-    *
-    * Typically, we don't assume passing through the data more times than you expected to be an
-    * error since production software should work correctly either way. But the
-    * KC_ALWAYS_ENFORCE_PASS_LIMIT override is designed for cases where it is necessary to enforce
-    * it. One example is unit testing.
-    * @param      funcs   The funcs
-    * @return     The result of the last expression in the list.
-    */
-   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs)
-   {
-      return MatrixOpsExecutor::Run(maxPasses, *this, std::forward<TFuncs>(funcs)...);
-   }
-
-   /**
     * @brief      Sets the value at a given flat index.
     *
     * @param[in]  value      The value
@@ -485,42 +485,32 @@ public:
       return mValues;
    }
 
-   /**
-    * @brief
-    * Iterates through each element providing a references to the output matrix. It may be assigned
-    * before exiting your lambda. The input matrix is readonly, but you can pass in self to the
-    * target matrix.
-    *
-    * @param      f      Function called per element. There are 3 valid formats:
-    * 1. [](const T& out, const T& input)
-    * 1. [](const T& out, const T& input, size_t flatIndex)
-    * 1. [](const T& out, const T& input, size_t... NIndices)
-    */
-   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
-   {
-      return MatrixFuncExecutor::Run(*this, kc::Map(outMatrix, std::forward<TFunc>(mapper)));
-   }
-
-   /**
-    * @brief
-    * Iterates through each element providing a references to the output matrix. It may be assigned
-    * before exiting your lambda. Maps to self.
-    *
-    * @param      f      Function called per element. There are 3 valid formats:
-    * 1. [](const T& out, const T& input)
-    * 1. [](const T& out, const T& input, size_t flatIndex)
-    * 1. [](const T& out, const T& input, size_t... NIndices)
-    */
-   template <typename TFunc> MatrixState<TAlloc, T, TDims...>& Map(TFunc&& mapper)
-   {
-      return MatrixFuncExecutor::Run(*this, kc::Map(*this, std::forward<TFunc>(mapper)));
-   }
-
 private:
    constexpr static size_t FlatSize = TotalVecSize<TDims...>();
    TAlloc<T, TDims...> mAllocator;
    std::span<T, FlatSize> mValues;
 };
+
+#pragma region MatrixView
+
+template <ScalarStateValue T, size_t... TDims>
+class IMatrixView : public virtual IMatrixState<T, TDims...>
+{
+public:
+   IMatrixView(std::span<const T> parentData)
+   {
+   }
+
+private:
+   std::span<const T> mRawData;
+};
+
+// class MatrixView
+// {
+// private:
+// };
+
+#pragma endregion
 
 // Vectors
 

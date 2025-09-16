@@ -184,12 +184,12 @@ TEST(StateTests, GeneralVectorStateTests)
       }));
 
    // Check a few of the functional things
-   vec.Map(
+   vec.Map(vec, 
       [](int& value, int, size_t index)
       {
          value = index + 1;
       });
-   vec.Map(
+   vec.Map(vec, 
       [](int& value, int)
       {
          value *= 2;
@@ -311,7 +311,7 @@ public:
 private:
    constexpr static void TestNoArg(mat_t& matrix)
    {
-      matrix.Map(
+      matrix.Map(matrix,
          [](func_test_t& value, func_test_t)
          {
             value = 1;
@@ -322,12 +322,12 @@ private:
       MatrixUtils::FillSequence(matrix);
       ASSERT_EQ(MatrixUtils::Sum(matrix), Trianglate(matrix.GetFlatSize() - 1));
 
-      matrix.Map(
+      matrix.Map(matrix,
          [](func_test_t& value, func_test_t)
          {
             value += 1;
          });
-      matrix.Map(
+      matrix.Map(matrix,
          [](func_test_t& value, func_test_t)
          {
             value *= 2;
@@ -362,7 +362,7 @@ private:
       MatrixUtils::Clear(matrix);
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
 
-      matrix.Map(
+      matrix.Map(matrix,
          [](func_test_t& value, func_test_t, size_t flatIndex)
          {
             value = flatIndex;
@@ -385,7 +385,7 @@ private:
       ASSERT_TRUE(MatrixUtils::AllEqual(matrix, 0));
 
       // Check that we can iterate with these indices
-      matrix.Map(
+      matrix.Map(matrix,
          [&matrix](func_test_t& value, func_test_t, TIdx... indices)
          {
             value = matrix.ToFlatIndex(indices...);

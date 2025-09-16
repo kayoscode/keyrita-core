@@ -7,7 +7,7 @@
 
 using namespace kc;
 using mat_t = uint32_t;
-constexpr size_t DIM = 5000;
+constexpr size_t DIM = 500;
 constexpr size_t SIZE = (size_t)DIM * DIM;
 
 int main()
@@ -31,7 +31,7 @@ int main()
       }
    }
 
-   std::cout << t.Milliseconds() << "\n";
+   std::cout << t.Microseconds() << "\n";
    std::cout << "Sum: " << sum << "\n";
    std::cout << "Value: " << values[100] << "\n";
 
@@ -54,7 +54,7 @@ int main()
             acc += value;
          }));
 
-   std::cout << t.Milliseconds() << "\n";
+   std::cout << t.Microseconds() << "\n";
    std::cout << "Sum: " << sum << "\n";
    std::cout << "Value: " << matrix[100] << "\n";
 }
