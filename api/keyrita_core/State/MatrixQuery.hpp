@@ -445,7 +445,7 @@ public:
     * @brief      Constructor: Create or inject state here.
     */
    Map(TMatrix& resultMatrix, TFunc&& func)
-      : mFunc(std::forward<TFunc>(func)), mResultMatrix(std::forward<TMatrix>(resultMatrix)),
+      : mFunc(std::forward<TFunc>(func)), mResultMatrix(resultMatrix),
         mData(mResultMatrix.GetValues())
    {
    }
@@ -473,7 +473,7 @@ private:
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[flatIndex], value);
+      mFunc(mResultMatrix.GetRef(indices...), value);
    }
 
    template <typename T, typename... TIdx>
@@ -481,18 +481,18 @@ private:
                (sizeof...(TIdx) > 1)
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[flatIndex], value, flatIndex);
+      mFunc(mResultMatrix.GetRef(indices...), value, flatIndex);
    }
 
    template <typename T, typename... TIdx>
       requires std::is_invocable_v<TFunc, MatrixValueType<TMatrix>&, const T&, TIdx...>
    constexpr void CallClient(const T& value, size_t flatIndex, TIdx... indices)
    {
-      mFunc(mData[flatIndex], value, indices...);
+      mFunc(mResultMatrix.GetRef(indices...), value, indices...);
    }
 
    const std::decay_t<TFunc> mFunc;
-   TMatrix&& mResultMatrix;
+   TMatrix& mResultMatrix;
    std::span<MatrixValueType<TMatrix>> mData;
 };
 
