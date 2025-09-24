@@ -24,6 +24,7 @@ set(HEADERS
         api/keyrita_core/State/StateBase.hpp
 
         api/keyrita_core/State.hpp
+        api/keyrita_core/Dataset.hpp
 
         # Private utils
         private_include/Timer.hpp

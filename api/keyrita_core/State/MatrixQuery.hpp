@@ -5,7 +5,6 @@
 #include <concepts>
 #include <cstddef>
 #include <span>
-#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -25,8 +24,6 @@ template <size_t... TDims> constexpr int GetNumDims()
  */
 template <size_t TFirstDim, size_t... TRemainingDims> constexpr size_t TotalVecSize()
 {
-   static_assert(TFirstDim > 0, "Each dimension must be greater than zero");
-
    if constexpr (sizeof...(TRemainingDims) == 0)
    {
       return TFirstDim;
