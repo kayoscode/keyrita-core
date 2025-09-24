@@ -25,7 +25,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T operator()(TIdx... indices)
+   T operator()(TIdx... indices) const
    {
       return GetValues()[ToFlatIndex(indices...)];
    }
@@ -33,7 +33,7 @@ public:
    /**
     * @return      Accesses the value at the given index and returns by ref.
     */
-   T operator[](size_t flatIndex)
+   T operator[](size_t flatIndex) const
    {
       return GetValues()[flatIndex];
    }
@@ -43,7 +43,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   T GetValue(TIdx... indices)
+   T GetValue(TIdx... indices) const
    {
       size_t flatIndex = ToFlatIndex(indices...);
       return (*this)[flatIndex];
@@ -52,7 +52,7 @@ public:
    /**
     * @return      Returns the value of the matrix at a given flat index.
     */
-   T GetValue(size_t flatIndex)
+   T GetValue(size_t flatIndex) const
    {
       return (*this)[flatIndex];
    }
@@ -87,7 +87,7 @@ public:
     * 1. [](T& out, const T& input, size_t flatIndex)
     * 1. [](T& out, const T& input, size_t... NIndices)
     */
-   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper)
+   template <typename TMatrix, typename TFunc> TMatrix& Map(TMatrix& outMatrix, TFunc&& mapper) const
    {
       return MatrixFuncExecutor::Run(*this, kc::Map(outMatrix, std::forward<TFunc>(mapper)));
    }
@@ -104,7 +104,7 @@ public:
     * 1. [](T& out, const T& input1, const T& input2, size_t... NIndices)
     */
    template <typename TMatrix, typename TOtherMatrix, typename TFunc>
-   TMatrix& Zip(TMatrix& outMatrix, const TOtherMatrix& otherMatrix, TFunc&& mapper)
+   TMatrix& Zip(TMatrix& outMatrix, const TOtherMatrix& otherMatrix, TFunc&& mapper) const
    {
       return MatrixFuncExecutor::Run(
          *this, kc::Zip(outMatrix, otherMatrix, std::forward<TFunc>(mapper)));
@@ -189,7 +189,7 @@ public:
     * @param      funcs   The funcs
     * @return     The result of the last expression in the list.
     */
-   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs)
+   template <typename... TFuncs> decltype(auto) Ops(TFuncs&&... funcs) const
    {
       return MatrixOpsExecutor::Run(
          std::numeric_limits<int>::max(), *this, std::forward<TFuncs>(funcs)...);
@@ -210,7 +210,7 @@ public:
     * @param      funcs   The funcs
     * @return     The result of the last expression in the list.
     */
-   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs)
+   template <typename... TFuncs> decltype(auto) Ops(int maxPasses, TFuncs&&... funcs) const
    {
       return MatrixOpsExecutor::Run(maxPasses, *this, std::forward<TFuncs>(funcs)...);
    }
@@ -284,7 +284,7 @@ public:
    /**
     * @return     True if all the dimensions are the same, false otherwise.
     */
-   template <typename TMatrix> constexpr static bool HasSameDims()
+   template <typename TMatrix> constexpr static bool HasSameDims() 
    {
       return std::remove_cvref_t<TMatrix>::template ApplyDims<HasSameDimsChecker>::HasSameDims();
    }
@@ -292,7 +292,7 @@ public:
    /**
     * @return     True if the dims match the dims passed in the parameter pack.
     */
-   template <size_t... TOtherDims> constexpr static bool HasSameDims()
+   template <size_t... TOtherDims> constexpr static bool HasSameDims() 
    {
       return HasSameDimsChecker<TOtherDims...>::HasSameDims();
    }
@@ -490,27 +490,6 @@ private:
    TAlloc<T, TDims...> mAllocator;
    std::span<T, FlatSize> mValues;
 };
-
-#pragma region MatrixView
-
-template <ScalarStateValue T, size_t... TDims>
-class IMatrixView : public virtual IMatrixState<T, TDims...>
-{
-public:
-   IMatrixView(std::span<const T> parentData)
-   {
-   }
-
-private:
-   std::span<const T> mRawData;
-};
-
-// class MatrixView
-// {
-// private:
-// };
-
-#pragma endregion
 
 // Vectors
 
