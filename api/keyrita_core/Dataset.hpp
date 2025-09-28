@@ -47,14 +47,14 @@ protected:
 template <int TNumCharacters> class Unigrams : public IUnigrams<TNumCharacters>
 {
 public:
-   HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
-   {
-      return this->mUnigrams;
-   }
-
    void Clear()
    {
       MatrixUtils::Clear(this->mUnigrams);
+   }
+
+   HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
+   {
+      return this->mUnigrams;
    }
 
    void SetUnigramFreq(int charIndex, size_t frequency)
