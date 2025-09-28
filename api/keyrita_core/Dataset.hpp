@@ -5,18 +5,19 @@
 #include <cstdint>
 #include <cstdlib>
 #include <malloc/_malloc_type.h>
+#include <memory>
 
 /**
- * @brief      Base class for a dataset containing corpus information for a specific alphabet.
+ * @brief      Base class for a dataset containing corpus information for a specific char.
  *             Stores N-grams to depth 3
- * @TParam TNumCharacters   The max number of characters available in the alphabet.
+ * @TParam TNumCharacters   The max number of characters available in the char.
  */
 namespace kc
 {
 /**
  * @brief      Provides the readonly interface to unigrams. Stores a matrix of N character
  * frequencies.
- * @tparam     TNumCharacters  The number of characters in the alphabet being used.
+ * @tparam     TNumCharacters  The number of characters in the char being used.
  */
 template <int TNumCharacters> class IUnigrams
 {
@@ -34,9 +35,9 @@ public:
       return mUnigrams;
    }
 
-   uint64_t GetUnigramFreq(int alphabetIndex) const
+   uint64_t GetUnigramFreq(int charIndex) const
    {
-      return mUnigrams(alphabetIndex);
+      return mUnigrams(charIndex);
    }
 
 protected:
@@ -46,14 +47,19 @@ protected:
 template <int TNumCharacters> class Unigrams : public IUnigrams<TNumCharacters>
 {
 public:
+   void Clear()
+   {
+      MatrixUtils::Clear(this->mUnigrams);
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
    {
       return this->mUnigrams;
    }
 
-   void SetUnigramFreq(int alphabetIndex, size_t frequency)
+   void SetUnigramFreq(int charIndex, size_t frequency)
    {
-      this->mUnigrams.GetRef(alphabetIndex) = frequency;
+      this->mUnigrams.GetRef(charIndex) = frequency;
    }
 
 private:
@@ -61,7 +67,7 @@ private:
 
 /**
  * @brief      Stores a matrix representing the bigram frequencies loaded into a dataset.
- * @tparam     TNumCharacters  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the char.
  */
 template <int TNumCharacters> class IBigrams
 {
@@ -74,9 +80,9 @@ public:
       return TNumCharacters;
    }
 
-   uint64_t GetBigramFreq(int alphabetIdx1, int alphabetIdx2) const
+   uint64_t GetBigramFreq(int charIdx1, int charIdx2) const
    {
-      return mBigrams(alphabetIdx1, alphabetIdx2);
+      return mBigrams(charIdx1, charIdx2);
    }
 
    const IMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix() const
@@ -89,19 +95,19 @@ public:
     * and returns it wrapped in a view. Note the view is a copy. The existing data in the matrix
     * will not be preserved.
     *
-    * @param[in]  alphabetIdx   The index in the alphabet to use as the starting character.
+    * @param[in]  charIdx   The index in the char to use as the starting character.
     * @param      result        The unigram frequencies of the bigrams starting with the first
     * character.
     */
-   void GetUnigramsStartingWith(int alphabetIdx1, Unigrams<TNumCharacters>& result)
+   void GetUnigramsStartingWith(int charIdx1, Unigrams<TNumCharacters>& result)
    {
       auto& resultMatrix = result.GetUnigramsMatrix();
       const auto& bigramsMatrix = GetBigramsMatrix();
 
       resultMatrix.Map(resultMatrix,
-         [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
+         [&bigramsMatrix, charIdx1](uint64_t& result, uint64_t value, size_t charIdx2)
          {
-            result = bigramsMatrix.GetValue(alphabetIdx1, alphabetIdx2);
+            result = bigramsMatrix.GetValue(charIdx1, charIdx2);
          });
    }
 
@@ -110,19 +116,19 @@ public:
     * and returns it wrapped in a view. Note the view is a copy. The existing data in the matrix
     * will not be preserved.
     *
-    * @param[in]  alphabetIdx   The index in the alphabet to use as the starting character.
+    * @param[in]  charIdx   The index in the char to use as the starting character.
     * @param      result        The unigram frequencies of the bigrams starting with the first
     * character.
     */
-   void GetUnigramsEndingWith(int alphabetIdx1, Unigrams<TNumCharacters>& result)
+   void GetUnigramsEndingWith(int charIdx1, Unigrams<TNumCharacters>& result)
    {
       auto& resultMatrix = result.GetUnigramsMatrix();
       const auto& bigramsMatrix = GetBigramsMatrix();
 
       resultMatrix.Map(resultMatrix,
-         [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
+         [&bigramsMatrix, charIdx1](uint64_t& result, uint64_t value, size_t charIdx2)
          {
-            result = bigramsMatrix.GetValue(alphabetIdx2, alphabetIdx1);
+            result = bigramsMatrix.GetValue(charIdx2, charIdx1);
          });
    }
 
@@ -132,19 +138,24 @@ public:
 
 /**
  * @brief      Stores a matrix representing the bigram frequencies loaded into a dataset.
- * @tparam     TNumCharacters  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the char.
  */
 template <int TNumCharacters> class Bigrams : public IBigrams<TNumCharacters>
 {
 public:
+   void Clear()
+   {
+      MatrixUtils::Clear(this->mBigrams);
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix()
    {
       return this->mBigrams;
    }
 
-   void SetBigramFrequency(int alphabetIdx1, int alphabetIdx2, size_t frequency)
+   void SetBigramFrequency(int charIdx1, int charIdx2, size_t frequency)
    {
-      this->mBigrams.GetRef(alphabetIdx1, alphabetIdx2) = frequency;
+      this->mBigrams.GetRef(charIdx1, charIdx2) = frequency;
    }
 
 private:
@@ -152,7 +163,7 @@ private:
 
 /**
  * @brief      Stores a matrix representing the trigram frequencies loaded into a dataset.
- * @tparam     TNumCharacters  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the char.
  */
 template <int TNumCharacters> class ITrigrams
 {
@@ -165,9 +176,9 @@ public:
       return TNumCharacters;
    }
 
-   uint64_t GetTrigramFrequency(int alphabetIdx1, int alphabetIdx2, int alphabetIdx3) const
+   uint64_t GetTrigramFrequency(int charIdx1, int charIdx2, int charIdx3) const
    {
-      return mTrigrams(alphabetIdx1, alphabetIdx2, alphabetIdx3);
+      return mTrigrams(charIdx1, charIdx2, charIdx3);
    }
 
    const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>&
@@ -182,20 +193,25 @@ protected:
 
 /**
  * @brief      Stores a matrix representing the trigram frequencies loaded into a dataset.
- * @tparam     TNumCharacters  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the char.
  */
 template <int TNumCharacters> class Trigrams : public ITrigrams<TNumCharacters>
 {
 public:
+   void Clear()
+   {
+      MatrixUtils::Clear(this->mTrigrams);
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& GetTrigramsMatrix()
    {
       return this->mTrigrams;
    }
 
    void SetTrigramFrequency(
-      int alphabetIdx1, int alphabetIdx2, int alphabetIdx3, uint64_t frequency)
+      int charIdx1, int charIdx2, int charIdx3, uint64_t frequency)
    {
-      this->mTrigrams(alphabetIdx1, alphabetIdx2, alphabetIdx3) = frequency;
+      this->mTrigrams(charIdx1, charIdx2, charIdx3) = frequency;
    }
 
 private:
@@ -234,9 +250,9 @@ public:
       return mSkipgrams;
    }
 
-   uint64_t GetSkipgramFrequency(int skipgramLength, int alphabetIdx1, int alphabetIdx2) const
+   uint64_t GetSkipgramFrequency(int skipgramLength, int charIdx1, int charIdx2) const
    {
-      return mSkipgrams(skipgramLength, alphabetIdx1, alphabetIdx2);
+      return mSkipgrams(skipgramLength, charIdx1, charIdx2);
    }
 
 public:
@@ -247,15 +263,20 @@ template <int TNumCharacters, int TNumSkipgrams>
 class Skipgrams : public ISkipgrams<TNumCharacters, TNumSkipgrams>
 {
 public:
+   void Clear()
+   {
+      MatrixUtils::Clear(this->mSkipgrams);
+   }
+
    HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& GetSkipgramsMatrix()
    {
       return this->mSkipgrams;
    }
 
    void SetSkipgramFrequency(
-      int skipgramLength, int alphabetIdx1, int alphabetIdx2, uint64_t frequency)
+      int skipgramLength, int charIdx1, int charIdx2, uint64_t frequency)
    {
-      this->mSkipgrams.GetRef(skipgramLength, alphabetIdx1, alphabetIdx2) = frequency;
+      this->mSkipgrams.GetRef(skipgramLength, charIdx1, charIdx2) = frequency;
    }
 
 private:
@@ -307,7 +328,7 @@ public:
    }
 
    /**
-    * @return     The number of characters in the alphabet.
+    * @return     The number of characters in the char.
     */
    constexpr int GetNumCharacters() const
    {
@@ -316,7 +337,7 @@ public:
 
 protected:
    /**
-    * Stores the character frequencies for each letter of the alphabet.
+    * Stores the character frequencies for each letter of the char.
     */
    Unigrams<TNumCharacters> mUnigrams;
    Bigrams<TNumCharacters> mBigrams;
@@ -364,6 +385,14 @@ public:
    Skipgrams<TNumCharacters, TNumSkipgrams>& GetSkipgrams()
    {
       return this->mSkipgrams;
+   }
+
+   void Clear()
+   {
+      this->mUnigrams.Clear();
+      this->mBigrams.Clear();
+      this->mTrigrams.Clear();
+      this->mSkipgrams.Clear();
    }
 };
 }   // namespace kc
