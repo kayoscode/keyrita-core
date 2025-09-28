@@ -9,27 +9,27 @@
 /**
  * @brief      Base class for a dataset containing corpus information for a specific alphabet.
  *             Stores N-grams to depth 3
- * @TParam TAlphabetSize   The max number of characters available in the alphabet.
+ * @TParam TNumCharacters   The max number of characters available in the alphabet.
  */
 namespace kc
 {
 /**
  * @brief      Provides the readonly interface to unigrams. Stores a matrix of N character
  * frequencies.
- * @tparam     TAlphabetSize  The number of characters in the alphabet being used.
+ * @tparam     TNumCharacters  The number of characters in the alphabet being used.
  */
-template <int TAlphabetSize> class IUnigrams
+template <int TNumCharacters> class IUnigrams
 {
 public:
    IUnigrams() = default;
    virtual ~IUnigrams() = default;
 
-   int GetAlphabetSize() const
+   int GetNumCharacters() const
    {
-      return TAlphabetSize;
+      return TNumCharacters;
    }
 
-   const IMatrixState<uint64_t, TAlphabetSize>& GetUnigramsMatrix() const
+   const IMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix() const
    {
       return mUnigrams;
    }
@@ -40,13 +40,13 @@ public:
    }
 
 protected:
-   HeapMatrixState<uint64_t, TAlphabetSize> mUnigrams;
+   HeapMatrixState<uint64_t, TNumCharacters> mUnigrams;
 };
 
-template <int TAlphabetSize> class Unigrams : public IUnigrams<TAlphabetSize>
+template <int TNumCharacters> class Unigrams : public IUnigrams<TNumCharacters>
 {
 public:
-   HeapMatrixState<uint64_t, TAlphabetSize>& GetUnigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
    {
       return this->mUnigrams;
    }
@@ -61,17 +61,17 @@ private:
 
 /**
  * @brief      Stores a matrix representing the bigram frequencies loaded into a dataset.
- * @tparam     TAlphabetSize  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the alphabet.
  */
-template <int TAlphabetSize> class IBigrams
+template <int TNumCharacters> class IBigrams
 {
 public:
    IBigrams() = default;
    virtual ~IBigrams() = default;
 
-   int GetAlphabetSize() const
+   int GetNumCharacters() const
    {
-      return TAlphabetSize;
+      return TNumCharacters;
    }
 
    uint64_t GetBigramFreq(int alphabetIdx1, int alphabetIdx2) const
@@ -79,7 +79,7 @@ public:
       return mBigrams(alphabetIdx1, alphabetIdx2);
    }
 
-   const IMatrixState<uint64_t, TAlphabetSize, TAlphabetSize>& GetBigramsMatrix() const
+   const IMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix() const
    {
       return mBigrams;
    }
@@ -93,16 +93,16 @@ public:
     * @param      result        The unigram frequencies of the bigrams starting with the first
     * character.
     */
-   void GetUnigramsStartingWith(int alphabetIdx1, Unigrams<TAlphabetSize>& result)
+   void GetUnigramsStartingWith(int alphabetIdx1, Unigrams<TNumCharacters>& result)
    {
       auto& resultMatrix = result.GetUnigramsMatrix();
       const auto& bigramsMatrix = GetBigramsMatrix();
 
       resultMatrix.Map(resultMatrix,
-               [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
-               {
-                  result = bigramsMatrix.GetValue(alphabetIdx1, alphabetIdx2);
-               });
+         [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
+         {
+            result = bigramsMatrix.GetValue(alphabetIdx1, alphabetIdx2);
+         });
    }
 
    /**
@@ -114,30 +114,30 @@ public:
     * @param      result        The unigram frequencies of the bigrams starting with the first
     * character.
     */
-   void GetUnigramsEndingWith(int alphabetIdx1, Unigrams<TAlphabetSize>& result)
+   void GetUnigramsEndingWith(int alphabetIdx1, Unigrams<TNumCharacters>& result)
    {
       auto& resultMatrix = result.GetUnigramsMatrix();
       const auto& bigramsMatrix = GetBigramsMatrix();
 
       resultMatrix.Map(resultMatrix,
-               [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
-               {
-                  result = bigramsMatrix.GetValue(alphabetIdx2, alphabetIdx1);
-               });
+         [&bigramsMatrix, alphabetIdx1](uint64_t& result, uint64_t value, size_t alphabetIdx2)
+         {
+            result = bigramsMatrix.GetValue(alphabetIdx2, alphabetIdx1);
+         });
    }
 
 public:
-   HeapMatrixState<uint64_t, TAlphabetSize, TAlphabetSize> mBigrams;
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters> mBigrams;
 };
 
 /**
  * @brief      Stores a matrix representing the bigram frequencies loaded into a dataset.
- * @tparam     TAlphabetSize  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the alphabet.
  */
-template <int TAlphabetSize> class Bigrams : public IBigrams<TAlphabetSize>
+template <int TNumCharacters> class Bigrams : public IBigrams<TNumCharacters>
 {
 public:
-   HeapMatrixState<uint64_t, TAlphabetSize, TAlphabetSize>& GetBigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix()
    {
       return this->mBigrams;
    }
@@ -152,17 +152,17 @@ private:
 
 /**
  * @brief      Stores a matrix representing the trigram frequencies loaded into a dataset.
- * @tparam     TAlphabetSize  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the alphabet.
  */
-template <int TAlphabetSize> class ITrigrams
+template <int TNumCharacters> class ITrigrams
 {
 public:
    ITrigrams() = default;
    virtual ~ITrigrams() = default;
 
-   int GetAlphabetSize() const
+   int GetNumCharacters() const
    {
-      return TAlphabetSize;
+      return TNumCharacters;
    }
 
    uint64_t GetTrigramFrequency(int alphabetIdx1, int alphabetIdx2, int alphabetIdx3) const
@@ -170,29 +170,30 @@ public:
       return mTrigrams(alphabetIdx1, alphabetIdx2, alphabetIdx3);
    }
 
-   const IMatrixState<uint64_t, TAlphabetSize, TAlphabetSize, TAlphabetSize>& GetTrigramsMatrix() const
+   const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>&
+   GetTrigramsMatrix() const
    {
       return mTrigrams;
    }
 
 protected:
-
-   HeapMatrixState<uint64_t, TAlphabetSize, TAlphabetSize, TAlphabetSize> mTrigrams;
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters> mTrigrams;
 };
 
 /**
  * @brief      Stores a matrix representing the trigram frequencies loaded into a dataset.
- * @tparam     TAlphabetSize  The number of characters in the alphabet.
+ * @tparam     TNumCharacters  The number of characters in the alphabet.
  */
-template <int TAlphabetSize> class Trigrams : public ITrigrams<TAlphabetSize>
+template <int TNumCharacters> class Trigrams : public ITrigrams<TNumCharacters>
 {
 public:
-   HeapMatrixState<uint64_t, TAlphabetSize, TAlphabetSize, TAlphabetSize>& GetTrigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& GetTrigramsMatrix()
    {
       return this->mTrigrams;
    }
 
-   void SetTrigramFrequency(int alphabetIdx1, int alphabetIdx2, int alphabetIdx3, uint64_t frequency)
+   void SetTrigramFrequency(
+      int alphabetIdx1, int alphabetIdx2, int alphabetIdx3, uint64_t frequency)
    {
       this->mTrigrams(alphabetIdx1, alphabetIdx2, alphabetIdx3) = frequency;
    }
@@ -211,15 +212,15 @@ private:
  *          skipgrams[3] = 3 characters between
  *          etc
  */
-template <int TAlphabetSize, int TNumSkipgrams> class ISkipgrams
+template <int TNumCharacters, int TNumSkipgrams> class ISkipgrams
 {
 public:
    ISkipgrams() = default;
    virtual ~ISkipgrams() = default;
 
-   int GetAlphabetSize() const
+   int GetNumCharacters() const
    {
-      return TAlphabetSize;
+      return TNumCharacters;
    }
 
    int GetNumSkipgrams() const
@@ -227,7 +228,8 @@ public:
       return TNumSkipgrams;
    }
 
-   const IMatrixState<uint64_t, TNumSkipgrams, TAlphabetSize, TAlphabetSize>& GetSkipgramsMatrix() const
+   const IMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>&
+   GetSkipgramsMatrix() const
    {
       return mSkipgrams;
    }
@@ -238,19 +240,20 @@ public:
    }
 
 public:
-   HeapMatrixState<uint64_t, TNumSkipgrams, TAlphabetSize, TAlphabetSize> mSkipgrams;
+   HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters> mSkipgrams;
 };
 
-template <int TAlphabetSize, int TNumSkipgrams>
-class Skipgrams : public ISkipgrams<TAlphabetSize, TNumSkipgrams>
+template <int TNumCharacters, int TNumSkipgrams>
+class Skipgrams : public ISkipgrams<TNumCharacters, TNumSkipgrams>
 {
 public:
-   HeapMatrixState<uint64_t, TNumSkipgrams, TAlphabetSize, TAlphabetSize>& GetSkipgramsMatrix()
+   HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& GetSkipgramsMatrix()
    {
       return this->mSkipgrams;
    }
 
-   void SetSkipgramFrequency(int skipgramLength, int alphabetIdx1, int alphabetIdx2, uint64_t frequency)
+   void SetSkipgramFrequency(
+      int skipgramLength, int alphabetIdx1, int alphabetIdx2, uint64_t frequency)
    {
       this->mSkipgrams.GetRef(skipgramLength, alphabetIdx1, alphabetIdx2) = frequency;
    }
@@ -258,7 +261,74 @@ public:
 private:
 };
 
-template <int TAlphabetSize, int TNumSkipgrams> class Dataset
+/**
+ * @brief      Defines a readonly view of a dataset. Provides unigrams, bigrams, trigrams and
+ * skipgrams
+ *
+ * @tparam     TNumCharacters  The number of characters allowed by the dataset.
+ * @tparam     TNumSkipgrams   The number of skipgrams the dataset cares about.
+ */
+template <int TNumCharacters, int TNumSkipgrams> class IDataset
+{
+public:
+   IDataset() = default;
+   virtual ~IDataset() = default;
+
+   /**
+    * @return     The matrix of unigrams.
+    */
+   const IUnigrams<TNumCharacters>& GetUnigrams() const
+   {
+      return mUnigrams;
+   }
+
+   /**
+    * @return     The matrix of bigrams.
+    */
+   const IBigrams<TNumCharacters>& GetBigrams() const
+   {
+      return mBigrams;
+   }
+
+   /**
+    * @return     The matrix of trigrams.
+    */
+   const ITrigrams<TNumCharacters>& GetTrigrams() const
+   {
+      return mTrigrams;
+   }
+
+   /**
+    * @return     The matrix of trigrams.
+    */
+   const ISkipgrams<TNumCharacters, TNumSkipgrams>& GetSkipgrams() const
+   {
+      return mSkipgrams;
+   }
+
+   /**
+    * @return     The number of characters in the alphabet.
+    */
+   constexpr int GetNumCharacters() const
+   {
+      return TNumCharacters;
+   }
+
+protected:
+   /**
+    * Stores the character frequencies for each letter of the alphabet.
+    */
+   Unigrams<TNumCharacters> mUnigrams;
+   Bigrams<TNumCharacters> mBigrams;
+   Trigrams<TNumCharacters> mTrigrams;
+   Skipgrams<TNumCharacters, TNumSkipgrams> mSkipgrams;
+};
+
+/**
+ * @brief      Defines a writable queriable dataset for all loaded data about the language.
+ */
+template <int TNumCharacters, int TNumSkipgrams>
+class Dataset : public IDataset<TNumCharacters, TNumSkipgrams>
 {
 public:
    Dataset() = default;
@@ -267,50 +337,33 @@ public:
    /**
     * @return     The matrix of unigrams.
     */
-   const IUnigrams<TAlphabetSize>& GetUnigrams() const
+   Unigrams<TNumCharacters>& GetUnigrams()
    {
-      return mUnigrams;
+      return this->mUnigrams;
    }
 
    /**
     * @return     The matrix of bigrams.
     */
-   const IBigrams<TAlphabetSize>& GetBigrams() const
+   Bigrams<TNumCharacters>& GetBigrams()
    {
-      return mBigrams;
+      return this->mBigrams;
    }
 
    /**
     * @return     The matrix of trigrams.
     */
-   const ITrigrams<TAlphabetSize>& GetTrigrams() const
+   Trigrams<TNumCharacters>& GetTrigrams()
    {
-      return mTrigrams;
+      return this->mTrigrams;
    }
 
    /**
     * @return     The matrix of trigrams.
     */
-   const ISkipgrams<TAlphabetSize, TNumSkipgrams>& GetSkipgrams() const
+   Skipgrams<TNumCharacters, TNumSkipgrams>& GetSkipgrams()
    {
-      return mSkipgrams;
+      return this->mSkipgrams;
    }
-
-   /**
-    * @return     The number of characters in the alphabet.
-    */
-   int GetAlphabetSize() const
-   {
-      return TAlphabetSize;
-   }
-
-private:
-   /**
-    * Stores the character frequencies for each letter of the alphabet.
-    */
-   Unigrams<TAlphabetSize> mUnigrams;
-   Bigrams<TAlphabetSize> mBigrams;
-   Trigrams<TAlphabetSize> mTrigrams;
-   Skipgrams<TAlphabetSize, TNumSkipgrams> mSkipgrams;
 };
 }   // namespace kc
