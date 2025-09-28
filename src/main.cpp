@@ -7,11 +7,14 @@
 
 using namespace kc;
 using mat_t = uint32_t;
-constexpr size_t DIM = 1000;
+constexpr size_t DIM = 20000;
 constexpr size_t SIZE = (size_t)DIM * DIM;
 
 int main()
 {
+   HeapMatrixState<mat_t, DIM, DIM> matrix;
+   MatrixUtils::FillSequence(matrix);
+   std::cout << matrix[100] << "\n";
    Timer t;
    size_t sum = 0;
 
@@ -35,7 +38,7 @@ int main()
    std::cout << "Sum: " << sum << "\n";
    std::cout << "Value: " << values[100] << "\n";
 
-   HeapMatrixState<mat_t, DIM, DIM> matrix;
+   MatrixUtils::Clear(matrix);
    t.Reset();
    sum = 0;
    matrix.Ops(1, Map(matrix,

@@ -25,7 +25,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T operator()(TIdx... indices)
+   T operator()(TIdx... indices) const
    {
       return GetValues()[ToFlatIndex(indices...)];
    }
@@ -33,7 +33,7 @@ public:
    /**
     * @return      Accesses the value at the given index and returns by ref.
     */
-   T operator[](size_t flatIndex)
+   T operator[](size_t flatIndex) const
    {
       return GetValues()[flatIndex];
    }
@@ -43,7 +43,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   T GetValue(TIdx... indices)
+   T GetValue(TIdx... indices) const
    {
       size_t flatIndex = ToFlatIndex(indices...);
       return (*this)[flatIndex];
@@ -52,7 +52,7 @@ public:
    /**
     * @return      Returns the value of the matrix at a given flat index.
     */
-   T GetValue(size_t flatIndex)
+   T GetValue(size_t flatIndex) const
    {
       return (*this)[flatIndex];
    }
@@ -418,7 +418,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   T operator()(TIdx... indices)
+   T operator()(TIdx... indices) const
    {
       return GetValues()[this->ToFlatIndex(indices...)];
    }
@@ -426,7 +426,7 @@ public:
    /**
     * @return      Accesses the value at the given index and returns by ref.
     */
-   T operator[](size_t flatIndex)
+   T operator[](size_t flatIndex) const
    {
       return GetValues()[flatIndex];
    }
@@ -436,7 +436,7 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...> && (sizeof...(TIdx) > 1)
-   T GetValue(TIdx... indices)
+   T GetValue(TIdx... indices) const
    {
       size_t flatIndex = this->ToFlatIndex(indices...);
       return (*this)[flatIndex];
@@ -445,7 +445,7 @@ public:
    /**
     * @return      Returns the value of the matrix at a given flat index.
     */
-   T GetValue(size_t flatIndex)
+   T GetValue(size_t flatIndex) const
    {
       return (*this)[flatIndex];
    }
