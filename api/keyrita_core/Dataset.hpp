@@ -52,6 +52,15 @@ public:
       MatrixUtils::Clear(this->mUnigrams);
    }
 
+   void CopyFrom(const IMatrixState<uint64_t, TNumCharacters>& unigramData)
+   {
+      this->mUnigrams.Zip(this->mUnigrams, unigramData,
+         [](uint64_t& result, uint64_t first, uint64_t copyData)
+         {
+            result = copyData;
+         });
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
    {
       return this->mUnigrams;
@@ -148,6 +157,15 @@ public:
       MatrixUtils::Clear(this->mBigrams);
    }
 
+   void CopyFrom(const IMatrixState<uint64_t, TNumCharacters, TNumCharacters>& bigramData)
+   {
+      this->mBigrams.Zip(this->mBigrams, bigramData,
+         [](uint64_t& result, uint64_t first, uint64_t copyData)
+         {
+            result = copyData;
+         });
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix()
    {
       return this->mBigrams;
@@ -203,13 +221,21 @@ public:
       MatrixUtils::Clear(this->mTrigrams);
    }
 
+   void CopyFrom(const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& trigramData)
+   {
+      this->mTrigrams.Zip(this->mTrigrams, trigramData,
+         [](uint64_t& result, uint64_t first, uint64_t copyData)
+         {
+            result = copyData;
+         });
+   }
+
    HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& GetTrigramsMatrix()
    {
       return this->mTrigrams;
    }
 
-   void SetTrigramFrequency(
-      int charIdx1, int charIdx2, int charIdx3, uint64_t frequency)
+   void SetTrigramFrequency(int charIdx1, int charIdx2, int charIdx3, uint64_t frequency)
    {
       this->mTrigrams(charIdx1, charIdx2, charIdx3) = frequency;
    }
@@ -268,13 +294,21 @@ public:
       MatrixUtils::Clear(this->mSkipgrams);
    }
 
+   void CopyFrom(const IMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& trigramData)
+   {
+      this->mSkipgrams.Zip(this->mSkipgrams, trigramData,
+         [](uint64_t& result, uint64_t first, uint64_t copyData)
+         {
+            result = copyData;
+         });
+   }
+
    HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& GetSkipgramsMatrix()
    {
       return this->mSkipgrams;
    }
 
-   void SetSkipgramFrequency(
-      int skipgramLength, int charIdx1, int charIdx2, uint64_t frequency)
+   void SetSkipgramFrequency(int skipgramLength, int charIdx1, int charIdx2, uint64_t frequency)
    {
       this->mSkipgrams.GetRef(skipgramLength, charIdx1, charIdx2) = frequency;
    }
