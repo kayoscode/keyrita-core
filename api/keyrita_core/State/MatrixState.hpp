@@ -375,10 +375,9 @@ public:
     */
    template <typename... TIdx>
       requires MatrixIndices<sizeof...(TDims), TIdx...>
-   MatrixState& SetValue(T value, TIdx... indices)
+   void SetValue(T value, TIdx... indices)
    {
       this->SetValue(value, this->ToFlatIndex(indices...));
-      return *this;
    }
 
    /**
@@ -390,10 +389,9 @@ public:
     */
    template <typename TFunc>
       requires MatrixBulkAction<T, TFunc>
-   MatrixState& SetValues(TFunc&& setter)
+   void SetValues(TFunc&& setter)
    {
       setter(mValues, FlatSize);
-      return *this;
    }
 
    /**
@@ -403,14 +401,12 @@ public:
     *
     * @return     Self
     */
-   MatrixState& SetValues(const T& value)
+   void SetValues(const T& value)
    {
       for (size_t i = 0; i < FlatSize; i++)
       {
          mValues[i] = value;
       }
-
-      return *this;
    }
 
    /**

@@ -2,10 +2,11 @@
 
 #include "keyrita_core/State/MatrixState.hpp"
 #include "keyrita_core/State/MatrixUtils.hpp"
+#include <array>
 #include <cstdint>
 #include <cstdlib>
-#include <malloc/_malloc_type.h>
-#include <memory>
+#include <string>
+#include <type_traits>
 
 /**
  * @brief      Base class for a dataset containing corpus information for a specific char.
@@ -30,7 +31,7 @@ public:
       return TNumCharacters;
    }
 
-   const IMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix() const
+   const IMatrixState<uint64_t, TNumCharacters>& GetMatrix() const
    {
       return mUnigrams;
    }
@@ -61,7 +62,7 @@ public:
          });
    }
 
-   HeapMatrixState<uint64_t, TNumCharacters>& GetUnigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters>& GetMatrix()
    {
       return this->mUnigrams;
    }
@@ -94,7 +95,7 @@ public:
       return mBigrams(charIdx1, charIdx2);
    }
 
-   const IMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix() const
+   const IMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetMatrix() const
    {
       return mBigrams;
    }
@@ -166,7 +167,7 @@ public:
          });
    }
 
-   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetBigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters>& GetMatrix()
    {
       return this->mBigrams;
    }
@@ -200,7 +201,7 @@ public:
    }
 
    const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>&
-   GetTrigramsMatrix() const
+   GetMatrix() const
    {
       return mTrigrams;
    }
@@ -221,7 +222,8 @@ public:
       MatrixUtils::Clear(this->mTrigrams);
    }
 
-   void CopyFrom(const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& trigramData)
+   void CopyFrom(
+      const IMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& trigramData)
    {
       this->mTrigrams.Zip(this->mTrigrams, trigramData,
          [](uint64_t& result, uint64_t first, uint64_t copyData)
@@ -230,7 +232,7 @@ public:
          });
    }
 
-   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& GetTrigramsMatrix()
+   HeapMatrixState<uint64_t, TNumCharacters, TNumCharacters, TNumCharacters>& GetMatrix()
    {
       return this->mTrigrams;
    }
@@ -247,11 +249,11 @@ private:
  * Stores the skipgram frequencies
  * The skipgrams are as a vector of bigrams where each the first index represents the
  * skipgram order, and the bigram frequency following represents the frequnecy of that bigram
- * such that skipgrams[2] -> ds[0] xx ds[3] where the number of characters between is equal to i
- * where we are using skipgrams[i]
+ * such that skipgrams[0] -> ds[0] xx ds[3] where the number of characters between is equal to i
+ * where we are using skipgrams[i - 2]
  *
- * Example: skipgrams[0] = 0 characters between
- *          skipgrams[3] = 3 characters between
+ * Example: skipgrams[0] = 2 characters between
+ *          skipgrams[3] = 5 characters between
  *          etc
  */
 template <int TNumCharacters, int TNumSkipgrams> class ISkipgrams
@@ -265,13 +267,13 @@ public:
       return TNumCharacters;
    }
 
-   int GetNumSkipgrams() const
+   constexpr static int GetNumSkipgrams()
    {
       return TNumSkipgrams;
    }
 
    const IMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>&
-   GetSkipgramsMatrix() const
+   GetMatrix() const
    {
       return mSkipgrams;
    }
@@ -294,7 +296,8 @@ public:
       MatrixUtils::Clear(this->mSkipgrams);
    }
 
-   void CopyFrom(const IMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& trigramData)
+   void CopyFrom(
+      const IMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& trigramData)
    {
       this->mSkipgrams.Zip(this->mSkipgrams, trigramData,
          [](uint64_t& result, uint64_t first, uint64_t copyData)
@@ -303,7 +306,7 @@ public:
          });
    }
 
-   HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& GetSkipgramsMatrix()
+   HeapMatrixState<uint64_t, TNumSkipgrams, TNumCharacters, TNumCharacters>& GetMatrix()
    {
       return this->mSkipgrams;
    }
@@ -364,9 +367,18 @@ public:
    /**
     * @return     The number of characters in the char.
     */
-   constexpr int GetNumCharacters() const
+   constexpr static int GetNumCharacters()
    {
       return TNumCharacters;
+   }
+
+   /**
+    * @brief      The number of skipgrams supported.
+    * @return     The number skipgrams.
+    */
+   constexpr static int GetNumSkipgrams()
+   {
+      return TNumSkipgrams;
    }
 
 protected:
@@ -428,5 +440,172 @@ public:
       this->mTrigrams.Clear();
       this->mSkipgrams.Clear();
    }
+
+   using unigrams_type = Unigrams<TNumCharacters>;
+   using bigrams_type = Bigrams<TNumCharacters>;
+   using trigrams_type = Trigrams<TNumCharacters>;
+   using skipgrams_type = Skipgrams<TNumSkipgrams, TNumCharacters>;
+
+private:
+};
+
+/**
+ * @brief      Class instance responsible for loading text into a dataset in a memory efficient way
+ * and flexible way. 
+ *
+ * @tparam     TDataset     The type of the dataset we are loading into.
+ * @tparam     TCharMapper  The function which processes each character in the corpus and returns
+ *                          the corresponding dataset character.
+ */
+template <typename TDataset, typename TCharMapper> class DatasetLoader
+{
+public:
+   /**
+    * @brief      Standard constructor.
+    * @param      dataset  The dataset
+    */
+   DatasetLoader(TDataset& dataset)
+   {
+      // Reset is not called, but we expect the dataset to be cleared before loading the dataset.
+   }
+
+   /**
+    * @brief      There is some state that must be reset if the dataset is going to be reloaded. Call
+    * this to clear the existing data and reset that state.
+    */
+   void Reset()
+   {
+      mLeadingDataIdx = 0;
+      mDataset.Clear();
+   }
+
+   /**
+    * @brief      Loads the file in a chunked manner before processing and loading characters into
+    * the dataset.
+    *
+    * @param      dataset       The dataset
+    * @param[in]  maxChunkSize  The maximum chunk size
+    * @param[in]  fileName      The file name
+    */
+   void LoadDataSetFromFileChunked(TDataset& dataset, int maxChunkSize, const std::string& fileName)
+   {
+   }
+
+   /**
+    * @brief      Processes each character in the chunk and appends the data to the corpus dataset.
+    * Note, each character needs to be preprocessed into N dataset indices.
+    *
+    * @param      dataset   The dataset
+    * @param[in]  chunk     The chunk
+    */
+   void LoadFromChunk(const std::string& chunk)
+   {
+      // Ensure we've loaded the entire leading pipeline of data.
+      int chunkIndex = 0;
+      while (!mLeadingDataIdx < TDataset::GetNumSkipgrams() && chunkIndex < chunk.length())
+      {
+         int dbIdx = mCharMapper(chunk[chunkIndex]);
+
+         if (dbIdx >= 0)
+         {
+            mSkipgramsLeadingData[mLeadingDataIdx] = dbIdx;
+            mLeadingDataIdx++;
+         }
+
+         chunkIndex++;
+      }
+
+      // Leave early if we don't have enough points in our pipeline.
+      if (mLeadingDataIdx < TDataset::GetNumSkipgrams())
+      {
+         return;
+      }
+
+      auto& unigramData = mDataset.GetUnigrams().GetMatrix();
+      auto& bigramData = mDataset.GetBigrams().GetMatrix();
+      auto& trigramData = mDataset.GetTrigrams().GetMatrix();
+      auto& skipgramData = mDataset.GetSkipgrams().GetMatrix();
+
+      //tODO
+      for (int i = 0; i < mLeadingDataIdx; i++)
+      {
+         int dbIdx = mCharMapper(mSkipgramsLeadingData[i]);
+
+         unigramData.GetRef(dbIdx)++;
+      }
+
+      // Now that we have enough data, handle our leading character points.
+      charFreq[charToIndex[filteredString[0]]]++;
+      charFreq[charToIndex[filteredString[1]]]++;
+      charFreq[charToIndex[filteredString[2]]]++;
+      charFreq[charToIndex[filteredString[3]]]++;
+      charFreq[charToIndex[filteredString[4]]]++;
+      charFreq[charToIndex[filteredString[5]]]++;
+      bigramFreq[GET_BG(0, 1)]++;
+      bigramFreq[GET_BG(1, 2)]++;
+      bigramFreq[GET_BG(2, 3)]++;
+      bigramFreq[GET_BG(3, 4)]++;
+      bigramFreq[GET_BG(4, 5)]++;
+
+      trigramFreq[TAIDX(0, 1, 2)]++;
+      trigramFreq[TAIDX(1, 2, 3)]++;
+      trigramFreq[TAIDX(2, 3, 4)]++;
+      trigramFreq[TAIDX(3, 4, 5)]++;
+
+      // SkipGrams of [2]. (meaning two characters between).
+      skipGramFreq[SKIDX(0, 0, 3)]++;
+      skipGramFreq[SKIDX(0, 1, 4)]++;
+      skipGramFreq[SKIDX(0, 2, 5)]++;
+
+      // SkipGrams of [3]
+      skipGramFreq[SKIDX(1, 0, 4)]++;
+      skipGramFreq[SKIDX(1, 1, 5)]++;
+
+      // SkipGrams of [4]
+      skipGramFreq[SKIDX(2, 0, 5)]++;
+
+      // The dataset is big enough to just skip the first couple characters, no problem.
+      for (unsigned int i = 6; i < filteredString.size(); i++)
+      {
+         if (*canceled)
+         {
+            return -1;
+         }
+
+         charFreq[charToIndex[filteredString[i]]]++;
+
+         // Deal with bigrams.
+         bigramFreq[GET_BG(i - 1, i)]++;
+
+         // Deal with trigrams.
+         trigramFreq[TAIDX(i - 2, i - 1, i)]++;
+
+         // Deal with skipgrams.
+         skipGramFreq[SKIDX(0, i - 3, i)]++;
+         skipGramFreq[SKIDX(1, i - 4, i)]++;
+         skipGramFreq[SKIDX(2, i - 5, i)]++;
+
+         *progress = (((double)i + 1) / (double)filteredString.size());
+      }
+
+      delete[] toLowerMap;
+
+      return filteredString.size();
+   }
+
+private:
+   TDataset& mDataset;
+   std::decay_t<TCharMapper> mCharMapper;
+
+   /**
+    * @return      Returns the number of leading datapoints we need to add a chunk to the dataset.
+    */
+   constexpr int GetNumRequiredLeadingChars()
+   {
+      // We subtract 2 since we aren't using unigrams or bigrams when computing skipgrams.
+      return TDataset::GetNumSkipgrams - 2;
+   }
+   int mLeadingDataIdx = 0;
+   std::array<int, TDataset::GetNumSkipgrams()> mSkipgramsLeadingData;
 };
 }   // namespace kc

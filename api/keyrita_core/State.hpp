@@ -4,3 +4,4 @@
 #include "keyrita_core/State/MatrixState.hpp"
 #include "keyrita_core/State/MatrixUtils.hpp"
 #include "keyrita_core/State/ScalarState.hpp"
+#include "Dataset.hpp"
